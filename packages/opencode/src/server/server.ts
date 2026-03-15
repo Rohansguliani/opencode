@@ -558,9 +558,11 @@ export namespace Server {
         const reqPath = c.req.path
 
         try {
-          const appDistDir = Filesystem.resolve(process.cwd(), "../app/dist")
+          const appDistDir = path.resolve(__dirname, "../../../app/dist")
           const filePath = reqPath === "/" ? "/index.html" : reqPath
-          const fullPath = Filesystem.resolve(appDistDir, "." + filePath)
+          const fullPath = path.resolve(appDistDir, "." + filePath)
+
+          log.info("STATIC", { appDistDir, fullPath, exists: await Bun.file(fullPath).exists() })
 
           if (fullPath.startsWith(appDistDir)) {
             const file = Bun.file(fullPath)
@@ -575,7 +577,7 @@ export namespace Server {
           }
 
           if (!reqPath.includes(".")) {
-            const indexFile = Bun.file(Filesystem.resolve(appDistDir, "index.html"))
+            const indexFile = Bun.file(path.resolve(appDistDir, "index.html"))
             if (await indexFile.exists()) {
               const response = new Response(indexFile)
               response.headers.set(
@@ -585,10 +587,11 @@ export namespace Server {
               return response
             }
           }
-        } catch (e) {
-          log.error("static file error", e)
+        } catch (e: unknown) {
+          log.error("static file error", e as Record<string, any>)
         }
 
+        log.info("STATIC_FALLBACK", { reqPath })
         const response = await proxy(`https://app.opencode.ai${reqPath}`, {
           ...c.req,
           headers: {
