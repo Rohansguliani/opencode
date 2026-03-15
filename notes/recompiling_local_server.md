@@ -2,6 +2,8 @@
 
 When making changes to the UI or backend on the Tailscale local testing branch (`feat/tailscale-local-serve`), you must recompile the frontend and restart the backend server so the changes take effect over the Tailscale Funnel.
 
+> **CRITICAL WARNING:** In `server.ts`, the static path resolution MUST use `path.resolve(__dirname, "../../../app/dist")`. If you accidentally use `process.cwd()`, it will resolve incorrectly, fail silently, and proxy the user to `app.opencode.ai` (the live production server), making it seem like your local changes aren't working.
+
 **For Future Agents:** If you are asked to "apply changes", "recompile", or "restart the server" for testing, strictly follow these steps.
 
 ## 1. Rebuild the Frontend
