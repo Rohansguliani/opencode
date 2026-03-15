@@ -555,9 +555,41 @@ export namespace Server {
         },
       )
       .all("/*", async (c) => {
-        const path = c.req.path
+        const reqPath = c.req.path
 
-        const response = await proxy(`https://app.opencode.ai${path}`, {
+        try {
+          const appDistDir = Filesystem.resolve(process.cwd(), "../app/dist")
+          const filePath = reqPath === "/" ? "/index.html" : reqPath
+          const fullPath = Filesystem.resolve(appDistDir, "." + filePath)
+
+          if (fullPath.startsWith(appDistDir)) {
+            const file = Bun.file(fullPath)
+            if (await file.exists()) {
+              const response = new Response(file)
+              response.headers.set(
+                "Content-Security-Policy",
+                "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; media-src 'self' data:; connect-src 'self' data:",
+              )
+              return response
+            }
+          }
+
+          if (!reqPath.includes(".")) {
+            const indexFile = Bun.file(Filesystem.resolve(appDistDir, "index.html"))
+            if (await indexFile.exists()) {
+              const response = new Response(indexFile)
+              response.headers.set(
+                "Content-Security-Policy",
+                "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; media-src 'self' data:; connect-src 'self' data:",
+              )
+              return response
+            }
+          }
+        } catch (e) {
+          log.error("static file error", e)
+        }
+
+        const response = await proxy(`https://app.opencode.ai${reqPath}`, {
           ...c.req,
           headers: {
             ...c.req.raw.headers,
