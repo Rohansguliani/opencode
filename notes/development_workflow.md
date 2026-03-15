@@ -27,8 +27,12 @@ We use a "Y-shaped" branching strategy to solve this:
    git cherry-pick <commit-hash-of-feature>
    ```
 
-3. **Test Locally**
-   Now your local environment branch contains BOTH your custom testing setup AND the new feature. You can run your dev server, compile, and test.
+3. **Test Locally (CRITICAL: RECOMPILE AND RESTART)**
+   Now your local environment branch contains BOTH your custom testing setup AND the new feature.
+   
+   To see your UI changes via Tailscale, you **MUST** compile the frontend to static files and restart the custom backend.
+   
+   See `notes/recompiling_local_server.md` for the exact build and restart commands!
 
 ```text
           /--- [Tailscale Changes] --- [Feature Code (Copied)]  <-- Local Testing Branch
