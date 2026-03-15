@@ -1,6 +1,7 @@
 import { BusEvent } from "@/bus/bus-event"
 import { Bus } from "@/bus"
 import { Log } from "../util/log"
+import * as path from "node:path"
 import { describeRoute, generateSpecs, validator, resolver, openAPIRouteHandler } from "hono-openapi"
 import { Hono } from "hono"
 import { cors } from "hono/cors"
@@ -562,8 +563,6 @@ export namespace Server {
           const filePath = reqPath === "/" ? "/index.html" : reqPath
           const fullPath = path.resolve(appDistDir, "." + filePath)
 
-          log.info("STATIC", { appDistDir, fullPath, exists: await Bun.file(fullPath).exists() })
-
           if (fullPath.startsWith(appDistDir)) {
             const file = Bun.file(fullPath)
             if (await file.exists()) {
@@ -591,7 +590,6 @@ export namespace Server {
           log.error("static file error", e as Record<string, any>)
         }
 
-        log.info("STATIC_FALLBACK", { reqPath })
         const response = await proxy(`https://app.opencode.ai${reqPath}`, {
           ...c.req,
           headers: {
