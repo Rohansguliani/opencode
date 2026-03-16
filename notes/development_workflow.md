@@ -43,3 +43,9 @@ We use a "Y-shaped" branching strategy to solve this:
 ```
 
 This ensures your Pull Requests remain perfectly clean while still allowing you to test features in your custom environment.
+
+## 4. Submitting the Pull Request (Compliance Rules)
+
+When you are ready to open the PR on GitHub, **you must read and follow `notes/pull_request_compliance.md`**.
+
+The `anomalyco/opencode` repository uses strict automated bots that will close your PR within 2 hours if you do not follow their exact Issue and PR templates!
