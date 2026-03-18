@@ -11,7 +11,7 @@ import { useGlobalSync } from "@/context/global-sync"
 import { useLanguage } from "@/context/language"
 import { useNotification } from "@/context/notification"
 import { getPinnedSessions, isSessionPinned } from "@/utils/pinned-sessions"
-import { ProjectIcon, SessionItem, type SessionItemProps } from "./sidebar-items"
+import { ProjectIcon, GridToggleItem, SessionItem, type SessionItemProps } from "./sidebar-items"
 import { childMapByParent, displayName, sortedRootSessions } from "./helpers"
 
 export type ProjectSidebarContext = {
