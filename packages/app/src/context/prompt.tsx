@@ -2,6 +2,7 @@ import { createStore, type SetStoreFunction } from "solid-js/store"
 import { createSimpleContext } from "@opencode-ai/ui/context"
 import { batch, createMemo, createRoot, onCleanup } from "solid-js"
 import { useParams } from "@solidjs/router"
+import { useSessionParams } from "@/hooks/use-session-params"
 import type { FileSelection } from "@/context/file"
 import { Persist, persisted } from "@/utils/persist"
 import { checksum } from "@opencode-ai/util/encode"
@@ -228,7 +229,7 @@ export const { use: usePrompt, provider: PromptProvider } = createSimpleContext(
   name: "Prompt",
   gate: false,
   init: () => {
-    const params = useParams()
+    const params = useSessionParams()
     const cache = new Map<string, PromptCacheEntry>()
 
     const disposeAll = () => {
