@@ -32,6 +32,7 @@ export const dict = {
   "command.session.next.unseen": "Next unread session",
   "command.session.archive": "Archive session",
 
+  "common.pinned": "PINNED_TEST",
   "command.palette": "Command palette",
 
   "command.theme.cycle": "Cycle theme",

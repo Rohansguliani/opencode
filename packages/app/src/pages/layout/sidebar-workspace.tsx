@@ -273,7 +273,7 @@ const WorkspaceSessionList = (props: {
       
       <Show when={pinnedSessions().length > 0}>
         <div class="px-2 py-1 mt-1 text-[11px] font-medium text-text-weak uppercase tracking-wider">
-          {props.language.t("common.pinned") || "Pinned"}
+          {props.language.t("common.pinned") || "PINNED_TEST"}
         </div>
         <For each={pinnedSessions()}>
           {(session) => (
