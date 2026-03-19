@@ -8,6 +8,7 @@ import { Spinner } from "@opencode-ai/ui/spinner"
 import { showToast } from "@opencode-ai/ui/toast"
 import { Tooltip, TooltipKeybind } from "@opencode-ai/ui/tooltip"
 import { getFilename } from "@opencode-ai/util/path"
+import { useParams } from "@solidjs/router"
 import { createEffect, createMemo, For, onCleanup, Show } from "solid-js"
 import { createStore } from "solid-js/store"
 import { Portal } from "solid-js/web"
@@ -262,16 +263,18 @@ export function SessionHeader() {
       .catch((err: unknown) => showRequestError(language, err))
   }
 
+  const routerParams = useParams()
+
   const centerMount = createMemo(() => {
     if (layout.sidebar.gridMode()) {
       // In grid mode, only mount to title bar if we are the actively focused session
-      if (params.id !== sync.data.session?.id) return null
+      if (routerParams.id !== params.id) return null
     }
     return document.getElementById("opencode-titlebar-center")
   })
   const rightMount = createMemo(() => {
     if (layout.sidebar.gridMode()) {
-      if (params.id !== sync.data.session?.id) return null
+      if (routerParams.id !== params.id) return null
     }
     return document.getElementById("opencode-titlebar-right")
   })
