@@ -99,6 +99,7 @@ const SessionRow = (props: {
   hasError: Accessor<boolean>
   unseenCount: Accessor<number>
   isPinned: Accessor<boolean>
+  isActive: Accessor<boolean>
   setHoverSession: (id: string | undefined) => void
   clearHoverProjectSoon: () => void
   sidebarOpened: Accessor<boolean>
@@ -117,6 +118,7 @@ const SessionRow = (props: {
   return (
   <A
     href={`/${props.slug}/session/${props.session.id}`}
+    classList={{ active: props.isActive() }}
     class={`flex items-center justify-between gap-3 min-w-0 text-left w-full focus:outline-none ${props.mobile ? "pr-[76px]" : ""} group-hover/session:pr-[76px] group-focus-within/session:pr-[76px] group-active/session:pr-[76px] ${props.dense ? "py-0.5" : "py-1"}`}
     onPointerDown={props.warmPress}
     onMouseEnter={props.warmHover}
@@ -343,6 +345,7 @@ export const SessionItem = (props: SessionItemProps): JSX.Element => {
       hasError={hasError}
       unseenCount={unseenCount}
       isPinned={isPinned}
+      isActive={isActive}
       setHoverSession={props.setHoverSession}
       clearHoverProjectSoon={props.clearHoverProjectSoon}
       sidebarOpened={layout.sidebar.opened}
