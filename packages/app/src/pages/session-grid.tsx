@@ -172,7 +172,8 @@ export function SessionGrid(props: { ids: string[] }) {
 
   const focusSession = (id: string, replace = false) => {
     const gridParam = searchParams.grid ? `?grid=${searchParams.grid}` : ""
-    navigate(`/${params.dir}/session/${id}${gridParam}`, { replace })
+    const url = id ? `/${params.dir}/session/${id}${gridParam}` : `/${params.dir}/session${gridParam}`
+    navigate(url, { replace })
   }
 
   const removeSessionFromGrid = (id: string) => {
@@ -180,12 +181,14 @@ export function SessionGrid(props: { ids: string[] }) {
     if (next.length <= 1) {
       setSearchParams({ grid: undefined })
       if (next.length === 1) {
-        navigate(`/${params.dir}/session/${next[0]}`)
+        const url = next[0] ? `/${params.dir}/session/${next[0]}` : `/${params.dir}/session`
+        navigate(url)
       } else {
         navigate(`/${params.dir}/session`)
       }
-    } else if (id === params.id) {
-      navigate(`/${params.dir}/session/${next[0]}?grid=${next.join(",")}`)
+    } else if (id === (params.id ?? "")) {
+      const url = next[0] ? `/${params.dir}/session/${next[0]}?grid=${next.join(",")}` : `/${params.dir}/session?grid=${next.join(",")}`
+      navigate(url)
     } else {
       setSearchParams({ grid: next.join(",") })
     }
@@ -271,7 +274,8 @@ export function SessionGrid(props: { ids: string[] }) {
     setDragId(null)
     
     if (currentLocal.join(",") !== props.ids.join(",")) {
-      const newFocusedId = params.id ? currentLocal.find((id) => id === params.id) ?? currentLocal[0] : undefined
+      const activeId = params.id ?? ""
+      const newFocusedId = currentLocal.find((id) => id === activeId) ?? currentLocal[0]
       const navUrl = newFocusedId
         ? `/${params.dir}/session/${newFocusedId}?grid=${currentLocal.join(",")}`
         : `/${params.dir}/session?grid=${currentLocal.join(",")}`
