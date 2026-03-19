@@ -11,7 +11,7 @@ import {
   untrack,
   type Accessor,
 } from "solid-js"
-import { useNavigate, useParams } from "@solidjs/router"
+import { useNavigate, useParams, useSearchParams } from "@solidjs/router"
 import { useLayout, LocalProject } from "@/context/layout"
 import { useGlobalSync } from "@/context/global-sync"
 import { Persist, persisted } from "@/utils/persist"
@@ -96,7 +96,7 @@ export default function Layout(props: ParentProps) {
   const [store, setStore, , ready] = persisted(
     Persist.global("layout.page", ["layout.page.v1"]),
     createStore({
-      lastProjectSession: {} as { [directory: string]: { directory: string; id: string; at: number } },
+      lastProjectSession: {} as { [directory: string]: { directory: string; id: string; grid?: string; at: number } },
       activeProject: undefined as string | undefined,
       activeWorkspace: undefined as string | undefined,
       workspaceOrder: {} as Record<string, string[]>,
@@ -112,6 +112,7 @@ export default function Layout(props: ParentProps) {
   let scrollContainerRef: HTMLDivElement | undefined
 
   const params = useParams()
+  const [searchParams] = useSearchParams<{ grid?: string }>()
   const globalSDK = useGlobalSDK()
   const globalSync = useGlobalSync()
   const layout = useLayout()
@@ -1247,7 +1248,7 @@ export default function Layout(props: ParentProps) {
   }
 
   function rememberSessionRoute(directory: string, id: string, root = activeProjectRoot(directory)) {
-    setStore("lastProjectSession", root, { directory, id, at: Date.now() })
+    setStore("lastProjectSession", root, { directory, id, grid: searchParams.grid, at: Date.now() })
     return root
   }
 
@@ -1293,12 +1294,13 @@ export default function Layout(props: ParentProps) {
       dirs = effectiveWorkspaceOrder(root, [root, ...listed], store.workspaceOrder[root])
       return canOpen(target)
     }
-    const openSession = async (target: { directory: string; id: string }) => {
+    const openSession = async (target: { directory: string; id: string; grid?: string }) => {
       if (!canOpen(target.directory)) return false
       const [data] = globalSync.child(target.directory, { bootstrap: false })
       if (data.session.some((item) => item.id === target.id)) {
-        setStore("lastProjectSession", root, { directory: target.directory, id: target.id, at: Date.now() })
-        navigateWithSidebarReset(`/${base64Encode(target.directory)}/session/${target.id}`)
+        setStore("lastProjectSession", root, { directory: target.directory, id: target.id, grid: target.grid, at: Date.now() })
+        const gridParam = layout.sidebar.gridMode() && target.grid ? `?grid=${target.grid}` : ""
+        navigateWithSidebarReset(`/${base64Encode(target.directory)}/session/${target.id}${gridParam}`)
         return true
       }
       const resolved = await globalSDK.client.session
@@ -1307,8 +1309,9 @@ export default function Layout(props: ParentProps) {
         .catch(() => undefined)
       if (!resolved?.directory) return false
       if (!canOpen(resolved.directory)) return false
-      setStore("lastProjectSession", root, { directory: resolved.directory, id: resolved.id, at: Date.now() })
-      navigateWithSidebarReset(`/${base64Encode(resolved.directory)}/session/${resolved.id}`)
+      setStore("lastProjectSession", root, { directory: resolved.directory, id: resolved.id, grid: target.grid, at: Date.now() })
+      const gridParam = layout.sidebar.gridMode() && target.grid ? `?grid=${target.grid}` : ""
+      navigateWithSidebarReset(`/${base64Encode(resolved.directory)}/session/${resolved.id}${gridParam}`)
       return true
     }
 
@@ -1749,8 +1752,8 @@ export default function Layout(props: ParentProps) {
 
   createEffect(
     on(
-      () => [pageReady(), params.dir, params.id, currentProject()?.worktree] as const,
-      ([ready, dir, id]) => {
+      () => [pageReady(), params.dir, params.id, searchParams.grid, currentProject()?.worktree] as const,
+      ([ready, dir, id, grid]) => {
         if (!ready || !dir) {
           activeRoute.session = ""
           activeRoute.sessionProject = ""
@@ -1768,7 +1771,7 @@ export default function Layout(props: ParentProps) {
           return
         }
 
-        const session = `${dir}/${id}`
+        const session = `${dir}/${id}?grid=${grid ?? ""}`
         if (session !== activeRoute.session) {
           activeRoute.session = session
           activeRoute.sessionProject = syncSessionRoute(directory, id, root)
@@ -2179,7 +2182,7 @@ export default function Layout(props: ParentProps) {
                       >
                         {language.t("command.session.new")}
                       </Button>
-                      <GridToggleItem mobile={panelProps.mobile} sidebarExpanded={() => true} />
+                      <GridToggleItem mobile={panelProps.mobile} sidebarExpanded={() => true} clearHoverProjectSoon={clearSidebarHoverState} />
                     </div>
                     <div class="flex-1 min-h-0">
                       <LocalWorkspace
@@ -2207,7 +2210,7 @@ export default function Layout(props: ParentProps) {
                     >
                       {language.t("workspace.new")}
                     </Button>
-                    <GridToggleItem mobile={panelProps.mobile} sidebarExpanded={() => true} />
+                    <GridToggleItem mobile={panelProps.mobile} sidebarExpanded={() => true} clearHoverProjectSoon={clearSidebarHoverState} />
                   </div>
                   <div class="relative flex-1 min-h-0">
                     <DragDropProvider
