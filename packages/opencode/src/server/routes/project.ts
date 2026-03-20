@@ -33,6 +33,35 @@ export const ProjectRoutes = lazy(() =>
         return c.json(projects)
       },
     )
+    .post(
+      "/",
+      describeRoute({
+        summary: "Create or get project",
+        description: "Create a project explicitly for a directory, optionally setting a name.",
+        operationId: "project.create",
+        responses: {
+          200: {
+            description: "Project information",
+            content: {
+              "application/json": {
+                schema: resolver(Project.Info),
+              },
+            },
+          },
+          ...errors(400),
+        },
+      }),
+      validator("json", z.object({ directory: z.string(), name: z.string().optional() })),
+      async (c) => {
+        const body = c.req.valid("json")
+        const { project } = await Project.fromDirectory(body.directory)
+        if (body.name && project.name !== body.name) {
+          const updated = await Project.update({ projectID: project.id, name: body.name })
+          return c.json(updated)
+        }
+        return c.json(project)
+      },
+    )
     .get(
       "/current",
       describeRoute({
