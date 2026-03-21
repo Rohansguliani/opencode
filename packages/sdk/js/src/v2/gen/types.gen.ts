@@ -2522,8 +2522,10 @@ export type ExperimentalWorkspaceCreateData = {
   body?: {
     id?: string
     type: string
-    branch: string | null
-    extra: unknown | null
+    branch?: string | null
+    extra?: unknown | null
+    name?: string | null
+    directory?: string | null
   }
   path?: never
   query?: {

@@ -3,6 +3,7 @@ import type { Adaptor } from "../types"
 
 const ADAPTORS: Record<string, () => Promise<Adaptor>> = {
   worktree: lazy(async () => (await import("./worktree")).WorktreeAdaptor),
+  logical: lazy(async () => (await import("./logical")).LogicalAdaptor),
 }
 
 export function getAdaptor(type: string): Promise<Adaptor> {

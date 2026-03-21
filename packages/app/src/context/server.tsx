@@ -4,7 +4,7 @@ import { createStore } from "solid-js/store"
 import { Persist, persisted } from "@/utils/persist"
 import { useCheckServerHealth } from "@/utils/server-health"
 
-type StoredProject = { worktree: string; expanded: boolean }
+type StoredProject = { worktree: string; expanded: boolean; name?: string }
 type StoredServer = string | ServerConnection.HttpBase | ServerConnection.Http
 const HEALTH_POLL_INTERVAL_MS = 10_000
 
@@ -237,12 +237,12 @@ export const { use: useServer, provider: ServerProvider } = createSimpleContext(
       remove,
       projects: {
         list: projectsList,
-        open(directory: string) {
+        open(directory: string, name?: string) {
           const key = origin()
           if (!key) return
           const current = store.projects[key] ?? []
           if (current.find((x) => x.worktree === directory)) return
-          setStore("projects", key, [{ worktree: directory, expanded: true }, ...current])
+          setStore("projects", key, [{ worktree: directory, expanded: true, name }, ...current])
         },
         close(directory: string) {
           const key = origin()

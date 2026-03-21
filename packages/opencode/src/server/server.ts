@@ -194,20 +194,26 @@ export namespace Server {
       )
       .use(async (c, next) => {
         if (c.req.path === "/log") return next()
+
         const rawWorkspaceID = c.req.query("workspace") || c.req.header("x-opencode-workspace")
         const raw = c.req.query("directory") || c.req.header("x-opencode-directory") || process.cwd()
-        const directory = Filesystem.resolve(
-          (() => {
-            try {
-              return decodeURIComponent(raw)
-            } catch {
-              return raw
-            }
-          })(),
-        )
+        let cleanDir = raw;
+        let wsId = rawWorkspaceID;
+        try {
+          const decoded = decodeURIComponent(raw);
+          const parts = decoded.split("?workspace=");
+          cleanDir = parts[0];
+          if (parts.length > 1) {
+            wsId = parts[1];
+          }
+        } catch(e) {
+          cleanDir = raw;
+        }
+        const directory = Filesystem.resolve(cleanDir)
+
 
         return WorkspaceContext.provide({
-          workspaceID: rawWorkspaceID ? WorkspaceID.make(rawWorkspaceID) : undefined,
+          workspaceID: wsId ? WorkspaceID.make(wsId) : undefined,
           async fn() {
             return Instance.provide({
               directory,

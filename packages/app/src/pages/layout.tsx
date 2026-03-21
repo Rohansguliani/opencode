@@ -1356,8 +1356,8 @@ export default function Layout(props: ParentProps) {
     navigateWithSidebarReset(`/${base64Encode(session.directory)}/session/${session.id}`)
   }
 
-  function openProject(directory: string, navigate = true) {
-    layout.projects.open(directory)
+  function openProject(directory: string, navigate = true, name?: string) {
+    layout.projects.open(directory, name)
     if (navigate) navigateToProject(directory)
   }
 
@@ -1453,7 +1453,7 @@ export default function Layout(props: ParentProps) {
       () => (
         <DialogAddProject
           onSelect={(directory, name) => {
-            openProject(directory, true)
+            openProject(directory, true, name)
           }}
         />
       ),

@@ -62,11 +62,11 @@ export function DialogAddProject(props: { onSelect: (directory: string, name?: s
       } else if (finalDir.startsWith("~/")) {
         finalDir = (globalSync.data.path?.home ?? "") + finalDir.slice(1);
       }
-      if (store.name) {
-        // Send a request to backend to create/update the project with the name
-        const res = 
-        await globalSDK.client.project.create({ body_directory: finalDir, name: store.name })
-      }
+        // Always create a workspace to ensure isolated sessions
+        const ws = await globalSDK.client.experimental.workspace.create({ body_directory: finalDir, type: "logical", name: store.name || undefined })
+        if (ws?.data?.id) {
+          finalDir = finalDir + "?workspace=" + ws.data.id;
+        }
       // Force global sync to fetch the newly updated project so the sidebar updates instantly
       await globalSync.bootstrap();
       props.onSelect(finalDir, store.name)
