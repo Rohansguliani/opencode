@@ -3,6 +3,7 @@ import { Log } from "../util/log"
 import { Instance } from "../project/instance"
 import { BusEvent } from "./bus-event"
 import { GlobalBus } from "./global"
+import { WorkspaceContext } from "../control-plane/workspace-context"
 
 export namespace Bus {
   const log = Log.create({ service: "bus" })
@@ -57,7 +58,7 @@ export namespace Bus {
       }
     }
     GlobalBus.emit("event", {
-      directory: Instance.directory,
+      directory: WorkspaceContext.workspaceID ? Instance.directory + "?workspace=" + WorkspaceContext.workspaceID : Instance.directory,
       payload,
     })
     return Promise.all(pending)

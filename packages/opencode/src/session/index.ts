@@ -34,6 +34,24 @@ import type { LanguageModelV2Usage } from "@ai-sdk/provider"
 import { iife } from "@/util/iife"
 
 export namespace Session {
+
+  function stripWorkspace(dir) {
+    if (!dir) return { directory: dir, workspace_id: undefined };
+    let cleanDir = dir;
+    let wsId = undefined;
+    try {
+      const decoded = decodeURIComponent(dir);
+      const parts = decoded.split("?workspace=");
+      cleanDir = parts[0];
+      if (parts.length > 1) {
+        wsId = parts[1];
+      }
+    } catch(e) {
+      cleanDir = dir;
+    }
+    return { directory: cleanDir, workspace_id: wsId };
+  }
+
   const log = Log.create({ service: "session" })
 
   const parentTitlePrefix = "New session - "
@@ -231,7 +249,7 @@ export namespace Session {
         directory: Instance.directory,
         title: input?.title,
         permission: input?.permission,
-        workspaceID: input?.workspaceID,
+        workspaceID: input?.workspaceID ?? WorkspaceContext.workspaceID,
       })
     },
   )
@@ -552,7 +570,13 @@ export namespace Session {
       conditions.push(eq(SessionTable.workspace_id, WorkspaceContext.workspaceID))
     }
     if (input?.directory) {
-      conditions.push(eq(SessionTable.directory, input.directory))
+      const parsed = stripWorkspace(input.directory);
+      conditions.push(eq(SessionTable.directory, parsed.directory));
+      // In list(), WorkspaceContext handles the workspace ID natively, but if it didn't
+      // trigger the middleware (e.g. nested calls), we enforce it here safely.
+      if (parsed.workspace_id && !WorkspaceContext.workspaceID) {
+         conditions.push(eq(SessionTable.workspace_id, parsed.workspace_id as any));
+      }
     }
     if (input?.roots) {
       conditions.push(isNull(SessionTable.parent_id))
@@ -592,7 +616,11 @@ export namespace Session {
     const conditions: SQL[] = []
 
     if (input?.directory) {
-      conditions.push(eq(SessionTable.directory, input.directory))
+      const parsed = stripWorkspace(input.directory);
+      conditions.push(eq(SessionTable.directory, parsed.directory));
+      if (parsed.workspace_id) {
+         conditions.push(eq(SessionTable.workspace_id, parsed.workspace_id as any));
+      }
     }
     if (input?.roots) {
       conditions.push(isNull(SessionTable.parent_id))

@@ -386,7 +386,7 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
       return available[Math.floor(Math.random() * available.length)]
     }
 
-    function enrich(project: { worktree: string; expanded: boolean }) {
+    function enrich(project: { worktree: string; expanded: boolean; name?: string }) {
       const [childStore] = globalSync.child(project.worktree, { bootstrap: false })
       const projectID = childStore.project
       const metadata = projectID
@@ -400,9 +400,15 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
         local?.icon?.override !== undefined ||
         local?.icon?.color !== undefined
 
+      let displayName = project.name || local?.name || metadata?.name || project.worktree.split(/[?#]/)[0].split('/').pop();
+      if (displayName?.includes('?workspace=')) {
+         displayName = displayName.split('?')[0];
+      }
+
       const base = {
         ...(metadata ?? {}),
         ...project,
+        name: displayName,
         icon: {
           url: metadata?.icon?.url,
           override: metadata?.icon?.override ?? childStore.icon,
@@ -416,7 +422,7 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
       return {
         ...base,
         id: base.id ?? "global",
-        name: local?.name,
+        name: base.name || local?.name,
         commands: local?.commands,
         icon: {
           url: base.icon?.url,
