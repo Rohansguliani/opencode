@@ -5,6 +5,7 @@ import { TextField } from "@opencode-ai/ui/text-field"
 import { createStore } from "solid-js/store"
 import { useLanguage } from "@/context/language"
 import { useGlobalSDK } from "@/context/global-sdk"
+import { useGlobalSync } from "@/context/global-sync"
 import { usePlatform } from "@/context/platform"
 import { useServer } from "@/context/server"
 import { DialogSelectDirectory } from "./dialog-select-directory"
@@ -15,6 +16,7 @@ export function DialogAddProject(props: { onSelect: (directory: string, name?: s
   const platform = usePlatform()
   const server = useServer()
   const globalSDK = useGlobalSDK()
+  const globalSync = useGlobalSync()
 
   const [store, setStore] = createStore({
     name: "",
@@ -54,11 +56,20 @@ export function DialogAddProject(props: { onSelect: (directory: string, name?: s
     setStore("saving", true)
     
     try {
+            let finalDir = store.directory;
+      if (finalDir === "~") {
+        finalDir = globalSync.data.path?.home ?? finalDir;
+      } else if (finalDir.startsWith("~/")) {
+        finalDir = (globalSync.data.path?.home ?? "") + finalDir.slice(1);
+      }
       if (store.name) {
         // Send a request to backend to create/update the project with the name
-        await globalSDK.client.project.create({ body_directory: store.directory, name: store.name })
+        const res = 
+        await globalSDK.client.project.create({ body_directory: finalDir, name: store.name })
       }
-      props.onSelect(store.directory, store.name)
+      // Force global sync to fetch the newly updated project so the sidebar updates instantly
+      await globalSync.bootstrap();
+      props.onSelect(finalDir, store.name)
       dialog.close()
     } catch (err) {
       console.error(err)
