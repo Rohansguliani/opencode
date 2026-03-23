@@ -576,7 +576,9 @@ export namespace Session {
       // trigger the middleware (e.g. nested calls), we enforce it here safely.
       if (parsed.workspace_id && !WorkspaceContext.workspaceID) {
          conditions.push(eq(SessionTable.workspace_id, WorkspaceID.make(parsed.workspace_id as string)));
-      }
+       } else if (!parsed.workspace_id && !WorkspaceContext.workspaceID) {
+         conditions.push(isNull(SessionTable.workspace_id))
+       }
     }
     if (input?.roots) {
       conditions.push(isNull(SessionTable.parent_id))
