@@ -2,6 +2,8 @@
 
 ## Creating Clean Pull Requests
 
+Start with `notes/pr_runbook.md` if you need the exact end-to-end sequence.
+
 When developing new features for OpenCode while relying on a custom local testing setup (like Tailscale with Basic Auth), you must separate your feature code from your local environment code.
 
 If you commit both to the same branch, your Pull Request will include your personal Tailscale/environment changes, which should not be merged into the main OpenCode repository.
@@ -28,11 +30,16 @@ We use a "Y-shaped" branching strategy to solve this:
    ```
 
 3. **Test Locally (CRITICAL: RECOMPILE AND RESTART)**
-   Now your local environment branch contains BOTH your custom testing setup AND the new feature.
-   
-   To see your UI changes via Tailscale, you **MUST** compile the frontend to static files and restart the custom backend.
-   
-   See `notes/recompiling_local_server.md` for the exact build and restart commands!
+    Now your local environment branch contains BOTH your custom testing setup AND the new feature.
+
+    To see your UI changes via Tailscale, you **MUST** rebuild the frontend and restart the custom backend.
+
+    Use:
+    ```bash
+    ./scripts/rebuild-local.sh
+    ```
+
+    See `notes/recompiling_local_server.md` for details.
 
 ```text
           /--- [Tailscale Changes] --- [Feature Code (Copied)]  <-- Local Testing Branch
@@ -46,6 +53,9 @@ This ensures your Pull Requests remain perfectly clean while still allowing you 
 
 ## 4. Submitting the Pull Request (Compliance Rules)
 
-When you are ready to open the PR on GitHub, **you must read and follow `notes/pull_request_compliance.md`**.
+When you are ready to open the PR on GitHub:
+
+1. Read `notes/pr_runbook.md`
+2. Read `notes/pull_request_compliance.md`
 
 The `anomalyco/opencode` repository uses strict automated bots that will close your PR within 2 hours if you do not follow their exact Issue and PR templates!

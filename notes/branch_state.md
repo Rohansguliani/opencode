@@ -1,17 +1,26 @@
 # Branch State
 
-This document tracks the current state of branches used in the OpenCode development workflow.
+This file describes branch roles, not a live checklist of every current feature.
 
 ## Non-PR Branch: `feat/tailscale-local-serve`
-This is the long-lived local integration branch. It is currently being served on the Tailscale proxy and contains:
-1. **The Base:** `origin/dev`
-2. **Local Environment:** Commits configuring Tailscale proxy and static frontend serving.
-3. **Accumulated Features (Cherry-Picked from PR Branches):**
-   - Horizontal mobile swipe navigation
-   - Session list sorting fix (cherry-picked from `fix-session-sort` branch)
-   - *Working on:* Pinned sessions, deleting sessions, and UI cleanup.
 
-## Active PR Branches (Clean)
-- `fix-session-sort`: Fixes the bug where oldest sessions appeared at the top. (PR #17848)
+This is the long-lived local integration branch used for testing changes against the custom local/Tailscale setup.
 
-*Note: Features are developed on clean feature branches off `origin/dev` and cherry-picked into `feat/tailscale-local-serve` for testing. Once tested, the feature branches are pushed to GitHub as PRs.*
+It contains:
+- `origin/dev` as the base
+- local environment commits needed for local serving and auth
+- cherry-picked feature/fix commits that have been tested locally
+
+## Clean PR Branches
+
+Clean PR branches should:
+- branch from `origin/dev`
+- contain only the focused change for the PR
+- be pushed to the `rohan` fork
+- never include local-only environment changes from `feat/tailscale-local-serve`
+
+## Rule Of Thumb
+
+- Test on `feat/tailscale-local-serve`
+- Open PRs from a clean branch off `origin/dev`
+- Use `notes/pr_runbook.md` for the exact workflow

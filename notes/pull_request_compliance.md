@@ -2,12 +2,12 @@
 
 The `anomalyco/opencode` repository has strict, bot-enforced rules for submitting Pull Requests. **If you do not follow these rules exactly, the `github-actions` bot will flag the PR and automatically close it within 2 hours.**
 
-Future Agents: Read this carefully before running `gh pr create`!
+Future agents: read this together with `notes/pr_runbook.md` before running `gh pr create`.
 
 ## 1. Issue First Policy (CRITICAL)
 **ALL PRs must reference an existing issue.** You cannot just open a PR.
 - Before opening a PR, use the `gh issue create` command to create an issue.
-- You MUST use one of their issue templates located in `.github/ISSUE_TEMPLATE/` (e.g., `feature-request.yml` or `bug-report.yml`).
+- You MUST use one of their issue templates located in `.github/ISSUE_TEMPLATE/` (e.g., `feature-request.yml` or `bug-report.yml`). In practice, mirror the template headings in the body you pass to `gh issue create`.
 - Link the issue in the PR body using `Closes #<issue_number>` or `Fixes #<issue_number>`.
 
 ## 2. You MUST use the PR Template
@@ -33,7 +33,8 @@ If the PR involves UI changes, the maintainers require a screenshot or screen re
 
 ## Summary Workflow for PR Creation
 1. `cat .github/ISSUE_TEMPLATE/...` -> Find the right template.
-2. `gh issue create ...` -> Create the issue and get the Issue Number.
+2. `gh issue create ...` -> Create the issue and get the issue number.
 3. `cat .github/pull_request_template.md` -> Read the PR template.
-4. Draft the PR body matching the template exactly, referencing `Closes #123`.
-5. `gh pr create ...` -> Submit the compliant PR.
+4. Draft a short PR body matching the template exactly, referencing `Closes #123`.
+5. `git push -u rohan <branch>` -> Push the clean PR branch to the fork.
+6. `gh pr create ...` -> Submit the compliant PR.
