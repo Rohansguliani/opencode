@@ -9,6 +9,7 @@ import { Project } from "@opencode-ai/sdk/v2"
 import { Persist, persisted, removePersisted } from "@/utils/persist"
 import { decode64 } from "@/utils/base64"
 import { same } from "@/utils/same"
+import { workspaceTitle } from "@/utils/workspace"
 import { createScrollPersistence, type SessionScroll } from "./layout-scroll"
 import { createPathHelpers } from "./file/path"
 
@@ -400,9 +401,9 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
         local?.icon?.override !== undefined ||
         local?.icon?.color !== undefined
 
-      let displayName = project.name || local?.name || metadata?.name || project.worktree.split(/[?#]/)[0].split('/').pop();
-      if (displayName?.includes('?workspace=')) {
-         displayName = displayName.split('?')[0];
+      let displayName = project.name || local?.name || metadata?.name || workspaceTitle(project.worktree)
+      if (!displayName) {
+        displayName = workspaceTitle(project.worktree)
       }
 
       const base = {
@@ -575,9 +576,8 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
         list,
         open(directory: string, name?: string) {
           const root = rootFor(directory)
-          if (server.projects.list().find((x) => x.worktree === root)) return
           globalSync.project.loadSessions(root)
-          server.projects.open(root)
+          server.projects.open(root, name)
         },
         close(directory: string) {
           server.projects.close(directory)

@@ -8,7 +8,6 @@ import type {
   Todo,
 } from "@opencode-ai/sdk/v2/client"
 import { showToast } from "@opencode-ai/ui/toast"
-import { getFilename } from "@opencode-ai/util/path"
 import {
   createContext,
   getOwner,
@@ -36,6 +35,7 @@ import type { ProjectMeta } from "./global-sync/types"
 import { SESSION_RECENT_LIMIT } from "./global-sync/types"
 import { sanitizeProject } from "./global-sync/utils"
 import { formatServerError } from "@/utils/server-errors"
+import { workspaceTitle } from "@/utils/workspace"
 
 type GlobalStore = {
   ready: boolean
@@ -229,7 +229,7 @@ function createGlobalSync() {
       })
       .catch((err) => {
         console.error("Failed to load sessions", err)
-        const project = getFilename(directory)
+        const project = workspaceTitle(directory)
         showToast({
           variant: "error",
           title: language.t("toast.session.listFailed.title", { project }),

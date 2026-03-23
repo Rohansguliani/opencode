@@ -5,6 +5,7 @@ import type { VcsInfo } from "@opencode-ai/sdk/v2/client"
 import {
   DIR_IDLE_TTL_MS,
   MAX_DIR_STORES,
+  ROOT_SESSION_PAGE_LIMIT,
   type ChildOptions,
   type DirState,
   type IconCache,
@@ -176,7 +177,7 @@ export function createChildStoreManager(input: {
             mcp: {},
             lsp: [],
             vcs: vcsStore.value,
-            limit: 5,
+            limit: ROOT_SESSION_PAGE_LIMIT,
             message: {},
             part: {},
           })

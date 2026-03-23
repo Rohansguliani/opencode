@@ -5,16 +5,24 @@ import { List } from "@opencode-ai/ui/list"
 import type { ListRef } from "@opencode-ai/ui/list"
 import { getDirectory, getFilename } from "@opencode-ai/util/path"
 import fuzzysort from "fuzzysort"
-import { createMemo, createResource, createSignal } from "solid-js"
+import { createMemo, createResource, createSignal, onMount, type JSX } from "solid-js"
 import { useGlobalSDK } from "@/context/global-sdk"
 import { useGlobalSync } from "@/context/global-sync"
 import { useLayout } from "@/context/layout"
 import { useLanguage } from "@/context/language"
+import { stripWorkspace, workspaceTitle } from "@/utils/workspace"
 
 interface DialogSelectDirectoryProps {
   title?: string
   multiple?: boolean
   onSelect: (result: string | string[] | null) => void
+  onFilter?: (value: string) => void
+  chrome?: "dialog" | "plain"
+  closeOnSelect?: boolean
+  defaultFilter?: string
+  autofocus?: boolean
+  header?: JSX.Element
+  footer?: JSX.Element
 }
 
 type Row = {
@@ -252,8 +260,13 @@ export function DialogSelectDirectory(props: DialogSelectDirectoryProps) {
   const dialog = useDialog()
   const language = useLanguage()
 
-  const [filter, setFilter] = createSignal("")
+  const [filter, setFilter] = createSignal(props.defaultFilter ?? "")
   let list: ListRef | undefined
+
+  onMount(() => {
+    if (!props.defaultFilter) return
+    list?.setFilter(props.defaultFilter)
+  })
 
   const missingBase = createMemo(() => !(sync.data.path.home || sync.data.path.directory))
   const [fallbackPath] = createResource(
@@ -280,9 +293,7 @@ export function DialogSelectDirectory(props: DialogSelectDirectoryProps) {
 
   const recentProjects = createMemo(() => {
     const projects = layout.projects.list()
-    const byProject = new Map<string, number>()
-
-    for (const project of projects) {
+    const items = projects.map((project, index) => {
       let at = 0
       const dirs = [project.worktree, ...(project.sandboxes ?? [])]
       for (const directory of dirs) {
@@ -293,16 +304,28 @@ export function DialogSelectDirectory(props: DialogSelectDirectoryProps) {
           if (updated > at) at = updated
         }
       }
-      byProject.set(project.worktree, at)
-    }
 
-    return projects
-      .map((project, index) => ({ project, at: byProject.get(project.worktree) ?? 0, index }))
+      const root = stripWorkspace(project.worktree)
+      return {
+        root,
+        at,
+        index,
+        name: project.worktree === root ? project.name : undefined,
+      }
+    })
+
+    const seen = new Set<string>()
+    return items
       .sort((a, b) => b.at - a.at || a.index - b.index)
+      .filter((item) => {
+        if (seen.has(item.root)) return false
+        seen.add(item.root)
+        return true
+      })
       .slice(0, 5)
-      .map(({ project }) => {
-        const row = toRow(project.worktree, home(), "recent")
-        const name = project.name || getFilename(project.worktree)
+      .map((item) => {
+        const row = toRow(item.root, home(), "recent")
+        const name = item.name || workspaceTitle(item.root)
         return {
           ...row,
           search: `${row.search}\n${name}`,
@@ -318,13 +341,16 @@ export function DialogSelectDirectory(props: DialogSelectDirectoryProps) {
 
   function resolve(absolute: string) {
     props.onSelect(props.multiple ? [absolute] : absolute)
+    if (props.closeOnSelect === false) return
     dialog.close()
   }
 
-  return (
-    <Dialog title={props.title ?? language.t("command.project.open")}>
+  const content = (
+    <div class="flex h-full min-h-0 flex-col gap-4">
+      {props.header}
       <List
-        search={{ placeholder: language.t("dialog.directory.search.placeholder"), autofocus: true }}
+        class="min-h-0 flex-1"
+        search={{ placeholder: language.t("dialog.directory.search.placeholder"), autofocus: props.autofocus ?? true }}
         emptyMessage={language.t("dialog.directory.empty")}
         loadingMessage={language.t("common.loading")}
         items={items}
@@ -339,7 +365,11 @@ export function DialogSelectDirectory(props: DialogSelectDirectoryProps) {
           group.category === "recent" ? language.t("home.recentProjects") : language.t("command.project.open")
         }
         ref={(r) => (list = r)}
-        onFilter={(value) => setFilter(cleanInput(value))}
+        onFilter={(value) => {
+          const next = cleanInput(value)
+          setFilter(next)
+          props.onFilter?.(next)
+        }}
         onKeyEvent={(e, item) => {
           if (e.key !== "Tab") return
           if (e.shiftKey) return
@@ -353,6 +383,11 @@ export function DialogSelectDirectory(props: DialogSelectDirectoryProps) {
         }}
         onSelect={(path) => {
           if (!path) return
+          if (props.closeOnSelect === false) {
+            const value = displayPath(path.absolute, filter(), home())
+            setFilter(value)
+            list?.setFilter(value)
+          }
           resolve(path.absolute)
         }}
       >
@@ -387,6 +422,11 @@ export function DialogSelectDirectory(props: DialogSelectDirectoryProps) {
           )
         }}
       </List>
-    </Dialog>
+      {props.footer}
+    </div>
   )
+
+  if (props.chrome === "plain") return content
+
+  return <Dialog title={props.title ?? language.t("command.project.open")}>{content}</Dialog>
 }

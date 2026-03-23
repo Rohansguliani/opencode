@@ -241,7 +241,12 @@ export const { use: useServer, provider: ServerProvider } = createSimpleContext(
           const key = origin()
           if (!key) return
           const current = store.projects[key] ?? []
-          if (current.find((x) => x.worktree === directory)) return
+          const index = current.findIndex((x) => x.worktree === directory)
+          if (index !== -1) {
+            if (name) setStore("projects", key, index, "name", name)
+            setStore("projects", key, index, "expanded", true)
+            return
+          }
           setStore("projects", key, [{ worktree: directory, expanded: true, name }, ...current])
         },
         close(directory: string) {

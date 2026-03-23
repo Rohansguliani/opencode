@@ -311,12 +311,15 @@ export namespace Server {
           },
         }),
         async (c) => {
+          const directory = WorkspaceContext.workspaceID
+            ? `${Instance.directory}?workspace=${WorkspaceContext.workspaceID}`
+            : Instance.directory
           return c.json({
             home: Global.Path.home,
             state: Global.Path.state,
             config: Global.Path.config,
             worktree: Instance.worktree,
-            directory: Instance.directory,
+            directory,
           })
         },
       )

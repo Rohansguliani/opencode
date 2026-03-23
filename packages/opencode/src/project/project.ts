@@ -95,7 +95,15 @@ export namespace Project {
       .catch(() => undefined)
   }
 
-  export async function fromDirectory(directory: string) {
+  export async function fromDirectory(rawDirectory: string) {
+    let directory = rawDirectory;
+    try {
+      const decoded = decodeURIComponent(rawDirectory);
+      const parts = decoded.split("?workspace=");
+      directory = parts[0];
+    } catch(e) {
+      directory = rawDirectory;
+    }
     log.info("fromDirectory", { directory })
 
     const data = await iife(async () => {

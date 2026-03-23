@@ -11,6 +11,7 @@ import { base64Encode } from "@opencode-ai/util/encode"
 import { decode64 } from "@/utils/base64"
 import { showToast } from "@opencode-ai/ui/toast"
 import { useLanguage } from "@/context/language"
+import { joinWorkspace, splitWorkspace } from "@/utils/workspace"
 function DirectoryDataProvider(props: ParentProps<{ directory: string }>) {
   const navigate = useNavigate()
   const sync = useSync()
@@ -61,7 +62,9 @@ export default function Layout(props: ParentProps) {
       .path.get()
       .then((x) => {
         if (params.dir !== current) return
-        const next = x.data?.directory ?? raw
+        const source = splitWorkspace(raw)
+        const target = splitWorkspace(x.data?.directory ?? raw)
+        const next = joinWorkspace(target.root, source.id ?? target.id)
         batch(() => {
           setState("invalid", "")
           setState("resolved", next)

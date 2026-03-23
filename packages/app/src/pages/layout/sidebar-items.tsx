@@ -7,7 +7,6 @@ import { MessageNav } from "@opencode-ai/ui/message-nav"
 import { Spinner } from "@opencode-ai/ui/spinner"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { base64Encode } from "@opencode-ai/util/encode"
-import { getFilename } from "@opencode-ai/util/path"
 import { A, useNavigate, useParams, useSearchParams } from "@solidjs/router"
 import { type Accessor, createMemo, For, type JSX, Match, onCleanup, Show, Switch } from "solid-js"
 import { useGlobalSync } from "@/context/global-sync"
@@ -17,6 +16,7 @@ import { useNotification } from "@/context/notification"
 import { usePermission } from "@/context/permission"
 import { messageAgentColor } from "@/utils/agent"
 import { isSessionPinned, toggleSessionPinned } from "@/utils/pinned-sessions"
+import { workspaceTitle } from "@/utils/workspace"
 import { sessionPermissionRequest } from "../session/composer/session-request-tree"
 import { hasProjectPermissions } from "./helpers"
 
@@ -38,7 +38,7 @@ export const ProjectIcon = (props: { project: LocalProject; class?: string; noti
     }),
   )
   const notify = createMemo(() => props.notify && (hasPermissions() || unseenCount() > 0))
-  const name = createMemo(() => props.project.name || getFilename(props.project.worktree))
+  const name = createMemo(() => props.project.name || workspaceTitle(props.project.worktree))
   return (
     <div class={`relative size-8 shrink-0 rounded ${props.class ?? ""}`}>
       <div class="size-full rounded overflow-clip">

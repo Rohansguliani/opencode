@@ -35,7 +35,7 @@ import { iife } from "@/util/iife"
 
 export namespace Session {
 
-  function stripWorkspace(dir) {
+  function stripWorkspace(dir: string | undefined) {
     if (!dir) return { directory: dir, workspace_id: undefined };
     let cleanDir = dir;
     let wsId = undefined;
@@ -571,11 +571,11 @@ export namespace Session {
     }
     if (input?.directory) {
       const parsed = stripWorkspace(input.directory);
-      conditions.push(eq(SessionTable.directory, parsed.directory));
+      conditions.push(eq(SessionTable.directory, parsed.directory as string));
       // In list(), WorkspaceContext handles the workspace ID natively, but if it didn't
       // trigger the middleware (e.g. nested calls), we enforce it here safely.
       if (parsed.workspace_id && !WorkspaceContext.workspaceID) {
-         conditions.push(eq(SessionTable.workspace_id, parsed.workspace_id as any));
+         conditions.push(eq(SessionTable.workspace_id, WorkspaceID.make(parsed.workspace_id as string)));
       }
     }
     if (input?.roots) {
@@ -587,6 +587,7 @@ export namespace Session {
     if (input?.search) {
       conditions.push(like(SessionTable.title, `%${input.search}%`))
     }
+    conditions.push(isNull(SessionTable.time_archived))
 
     const limit = input?.limit ?? 100
 
@@ -617,9 +618,9 @@ export namespace Session {
 
     if (input?.directory) {
       const parsed = stripWorkspace(input.directory);
-      conditions.push(eq(SessionTable.directory, parsed.directory));
+      conditions.push(eq(SessionTable.directory, parsed.directory as string));
       if (parsed.workspace_id) {
-         conditions.push(eq(SessionTable.workspace_id, parsed.workspace_id as any));
+         conditions.push(eq(SessionTable.workspace_id, WorkspaceID.make(parsed.workspace_id as string)));
       }
     }
     if (input?.roots) {

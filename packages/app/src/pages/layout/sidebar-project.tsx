@@ -10,9 +10,9 @@ import { useLayout, type LocalProject } from "@/context/layout"
 import { useGlobalSync } from "@/context/global-sync"
 import { useLanguage } from "@/context/language"
 import { useNotification } from "@/context/notification"
-import { getPinnedSessions, isSessionPinned } from "@/utils/pinned-sessions"
-import { ProjectIcon, GridToggleItem, SessionItem, type SessionItemProps } from "./sidebar-items"
-import { childMapByParent, displayName, sortedRootSessions } from "./helpers"
+import { stripWorkspace } from "@/utils/workspace"
+import { ProjectIcon, SessionItem, type SessionItemProps } from "./sidebar-items"
+import { childMapByParent, displayName, recentRootSessions, sortedRootSessions } from "./helpers"
 
 export type ProjectSidebarContext = {
   currentDir: Accessor<string>
@@ -189,25 +189,38 @@ const ProjectPreviewPanel = (props: {
   workspaces: Accessor<string[]>
   label: (directory: string) => string
   projectSessions: Accessor<ReturnType<typeof sortedRootSessions>>
-  projectPinnedSessions: Accessor<ReturnType<typeof sortedRootSessions>>
-  projectUnpinnedSessions: Accessor<ReturnType<typeof sortedRootSessions>>
+  previewSessions: Accessor<ReturnType<typeof recentRootSessions>>
   projectChildren: Accessor<Map<string, string[]>>
-  workspaceSessions: (directory: string) => ReturnType<typeof sortedRootSessions>
+  workspaceSessions: (directory: string) => ReturnType<typeof recentRootSessions>
   workspaceChildren: (directory: string) => Map<string, string[]>
   setOpen: (value: boolean) => void
   ctx: ProjectSidebarContext
   language: ReturnType<typeof useLanguage>
 }): JSX.Element => (
   <div class="-m-3 p-2 flex flex-col w-72">
-    <div class="px-4 pt-2 pb-1 flex items-center gap-2">
-      <div class="text-14-medium text-text-strong truncate grow">{displayName(props.project)}</div>
-    </div>
+    {(() => {
+      const sync = useGlobalSync()
+      const path = createMemo(() => {
+        const root = stripWorkspace(props.project.worktree)
+        const home = sync.data.path?.home
+        if (!home) return root
+        return root.replace(home, "~")
+      })
+      return (
+        <>
+          <div class="px-4 pt-2 pb-0.5 flex items-center gap-2">
+            <div class="text-14-medium text-text-strong truncate grow">{displayName(props.project)}</div>
+          </div>
+          <div class="px-4 pb-2 text-11-regular text-text-weak truncate">{path()}</div>
+        </>
+      )
+    })()}
     <div class="px-4 pb-2 text-12-medium text-text-weak">{props.language.t("sidebar.project.recentSessions")}</div>
     <div class="px-2 pb-2 flex flex-col gap-2">
       <Show
         when={props.workspaceEnabled()}
         fallback={
-          <For each={[...props.projectPinnedSessions(), ...props.projectUnpinnedSessions()].slice(0, 2)}>
+          <For each={props.previewSessions().slice(0, 2)}>
             {(session) => (
               <SessionItem
                 {...props.ctx.sessionProps}
@@ -323,12 +336,11 @@ export const SortableProject = (props: {
 
   const projectStore = createMemo(() => globalSync.child(props.project.worktree, { bootstrap: false })[0])
   const projectSessions = createMemo(() => sortedRootSessions(projectStore(), props.sortNow()))
-  const projectPinnedSessions = createMemo(() => projectSessions().filter(s => isSessionPinned(s.id)))
-  const projectUnpinnedSessions = createMemo(() => projectSessions().filter(s => !isSessionPinned(s.id)))
+  const previewSessions = createMemo(() => recentRootSessions(projectStore()))
   const projectChildren = createMemo(() => childMapByParent(projectStore().session))
   const workspaceSessions = (directory: string) => {
     const [data] = globalSync.child(directory, { bootstrap: false })
-    return sortedRootSessions(data, props.sortNow())
+    return recentRootSessions(data)
   }
   const workspaceChildren = (directory: string) => {
     const [data] = globalSync.child(directory, { bootstrap: false })
@@ -386,8 +398,7 @@ export const SortableProject = (props: {
             workspaces={workspaces}
             label={label}
             projectSessions={projectSessions}
-            projectPinnedSessions={projectPinnedSessions}
-            projectUnpinnedSessions={projectUnpinnedSessions}
+            previewSessions={previewSessions}
             projectChildren={projectChildren}
             workspaceSessions={workspaceSessions}
             workspaceChildren={workspaceChildren}

@@ -1,47 +1,44 @@
-import { getFilename } from "@opencode-ai/util/path"
 import { type Session } from "@opencode-ai/sdk/v2/client"
-import { getPinnedSessions } from "../../utils/pinned-sessions"
+import { compareSessionRecent } from "@/context/global-sync/session-trim"
+import { joinWorkspace, splitWorkspace, workspaceTitle } from "@/utils/workspace"
+
+const updated = (session: Session) => session.time.updated ?? session.time.created
 
 export const workspaceKey = (directory: string) => {
-  const drive = directory.match(/^([A-Za-z]:)[\\/]+$/)
-  if (drive) return `${drive[1]}${directory.includes("\\") ? "\\" : "/"}`
-  if (/^[\\/]+$/.test(directory)) return directory.includes("\\") ? "\\" : "/"
-  return directory.replace(/[\\/]+$/, "")
+  const workspace = splitWorkspace(directory)
+  const drive = workspace.root.match(/^([A-Za-z]:)[\\/]+$/)
+  const root = drive
+    ? `${drive[1]}${workspace.root.includes("\\") ? "\\" : "/"}`
+    : /^[\\/]+$/.test(workspace.root)
+      ? workspace.root.includes("\\") ? "\\" : "/"
+      : workspace.root.replace(/[\\/]+$/, "")
+  return joinWorkspace(root, workspace.id)
 }
 
-function sortSessions(now: number, pinned: string[]) {
-  const oneMinuteAgo = now - 60 * 1000
-  return (a: Session, b: Session) => {
-    const aPinned = pinned.includes(a.id)
-    const bPinned = pinned.includes(b.id)
-    if (aPinned && !bPinned) return -1
-    if (!aPinned && bPinned) return 1
-
-    const aUpdated = a.time.updated ?? a.time.created
-    const bUpdated = b.time.updated ?? b.time.created
-    const aRecent = aUpdated > oneMinuteAgo
-    const bRecent = bUpdated > oneMinuteAgo
-    if (aRecent && bRecent) return a.id > b.id ? -1 : a.id < b.id ? 1 : 0
-    if (aRecent && !bRecent) return -1
-    if (!aRecent && bRecent) return 1
-    return bUpdated - aUpdated
-  }
+const isRootVisibleSession = (session: Session, directory: string) => {
+  const workspace = splitWorkspace(directory)
+  return (
+    workspaceKey(session.directory) === workspaceKey(workspace.root) &&
+    (session.workspaceID || undefined) === workspace.id &&
+    !session.parentID &&
+    !session.time?.archived
+  )
 }
 
-const isRootVisibleSession = (session: Session, directory: string) =>
-  workspaceKey(session.directory) === workspaceKey(directory) && !session.parentID && !session.time?.archived
-
-export const sortedRootSessions = (store: { session: Session[]; path: { directory: string } }, now: number) => {
-  const pinned = getPinnedSessions()
-  return store.session.filter((session) => isRootVisibleSession(session, store.path.directory)).sort(sortSessions(now, pinned))
+export const sortedRootSessions = (store: { session: Session[]; path: { directory: string } }, _now: number) => {
+  return store.session.filter((session) => isRootVisibleSession(session, store.path.directory)).sort(compareSessionRecent)
 }
 
-export const latestRootSession = (stores: { session: Session[]; path: { directory: string } }[], now: number) => {
-  const pinned = getPinnedSessions()
+export const latestRootSession = (stores: { session: Session[]; path: { directory: string } }[], _now: number) => {
   return stores
     .flatMap((store) => store.session.filter((session) => isRootVisibleSession(session, store.path.directory)))
-    .sort(sortSessions(now, pinned))[0]
+    .sort(compareSessionRecent)[0]
 }
+
+export const recentRootSessions = (store: { session: Session[]; path: { directory: string } }) =>
+  store.session
+    .filter((session) => isRootVisibleSession(session, store.path.directory))
+    .sort((a, b) => updated(b) - updated(a))
 
 export function hasProjectPermissions<T>(
   request: Record<string, T[] | undefined>,
@@ -64,8 +61,7 @@ export const childMapByParent = (sessions: Session[]) => {
   return map
 }
 
-export const displayName = (project: { name?: string; worktree: string }) =>
-  project.name || getFilename(project.worktree)
+export const displayName = (project: { name?: string; worktree: string }) => project.name || workspaceTitle(project.worktree, "Workspace")
 
 export const errorMessage = (err: unknown, fallback: string) => {
   if (err && typeof err === "object" && "data" in err) {

@@ -10,13 +10,13 @@ import type {
   Todo,
 } from "@opencode-ai/sdk/v2/client"
 import { showToast } from "@opencode-ai/ui/toast"
-import { getFilename } from "@opencode-ai/util/path"
 import { retry } from "@opencode-ai/util/retry"
 import { batch } from "solid-js"
 import { reconcile, type SetStoreFunction, type Store } from "solid-js/store"
 import type { State, VcsCache } from "./types"
 import { cmp, normalizeProviderList } from "./utils"
 import { formatServerError } from "@/utils/server-errors"
+import { joinWorkspace, splitWorkspace, workspaceTitle } from "@/utils/workspace"
 
 type GlobalStore = {
   ready: boolean
@@ -136,7 +136,7 @@ export async function bootstrapDirectory(input: {
     await Promise.all(Object.values(blockingRequests).map((p) => retry(p)))
   } catch (err) {
     console.error("Failed to bootstrap instance", err)
-    const project = getFilename(input.directory)
+    const project = workspaceTitle(input.directory)
     showToast({
       variant: "error",
       title: input.translate("toast.project.reloadFailed.title", { project }),
@@ -149,7 +149,11 @@ export async function bootstrapDirectory(input: {
   if (input.store.status !== "complete") input.setStore("status", "partial")
 
   Promise.all([
-    input.sdk.path.get().then((x) => input.setStore("path", x.data!)),
+    input.sdk.path.get().then((x) => {
+      const source = splitWorkspace(input.directory)
+      const target = splitWorkspace(x.data?.directory ?? input.directory)
+      input.setStore("path", { ...x.data!, directory: joinWorkspace(target.root, source.id ?? target.id) })
+    }),
     input.sdk.command.list().then((x) => input.setStore("command", x.data ?? [])),
     input.sdk.session.status().then((x) => input.setStore("session_status", x.data!)),
     input.loadSessions(input.directory),

@@ -17,6 +17,7 @@ import { useGlobalSync } from "@/context/global-sync"
 import { Persist, persisted } from "@/utils/persist"
 import { base64Encode } from "@opencode-ai/util/encode"
 import { decode64 } from "@/utils/base64"
+import { stripWorkspace, workspaceTitle } from "@/utils/workspace"
 import { ResizeHandle } from "@opencode-ai/ui/resize-handle"
 import { Button } from "@opencode-ai/ui/button"
 import { IconButton } from "@opencode-ai/ui/icon-button"
@@ -61,7 +62,6 @@ import { DialogSelectServer } from "@/components/dialog-select-server"
 import { DialogSettings } from "@/components/dialog-settings"
 import { useCommand, type CommandOption } from "@/context/command"
 import { ConstrainDragXAxis, getDraggableId } from "@/utils/solid-dnd"
-import { DialogSelectDirectory } from "@/components/dialog-select-directory"
 import { DialogEditProject } from "@/components/dialog-edit-project"
 import { DialogAddProject } from "@/components/dialog-add-project"
 import { DebugBar } from "@/components/debug-bar"
@@ -90,7 +90,6 @@ import {
   type WorkspaceSidebarContext,
 } from "./layout/sidebar-workspace"
 import { ProjectDragOverlay, SortableProject, type ProjectSidebarContext } from "./layout/sidebar-project"
-import { GridToggleItem } from "./layout/sidebar-items"
 import { SidebarContent } from "./layout/sidebar-shell"
 
 export default function Layout(props: ParentProps) {
@@ -468,7 +467,7 @@ export default function Layout(props: ParentProps) {
         const sessionKey = `${directory}:${props.sessionID}`
 
         const sessionTitle = session?.title ?? language.t("command.session.new")
-        const projectName = getFilename(directory)
+        const projectName = workspaceTitle(directory)
         const description =
           e.details.type === "permission.asked"
             ? language.t("notification.permission.description", { sessionTitle, projectName })
@@ -624,7 +623,7 @@ export default function Layout(props: ParentProps) {
   }
 
   const workspaceLabel = (directory: string, branch?: string, projectId?: string) =>
-    workspaceName(directory, projectId, branch) ?? branch ?? getFilename(directory)
+    workspaceName(directory, projectId, branch) ?? branch ?? workspaceTitle(directory, "Workspace")
 
   const workspaceSetting = createMemo(() => {
     const project = currentProject()
@@ -1395,7 +1394,7 @@ export default function Layout(props: ParentProps) {
   async function renameProject(project: LocalProject, next: string) {
     const current = displayName(project)
     if (next === current) return
-    const name = next === getFilename(project.worktree) ? "" : next
+    const name = next === workspaceTitle(project.worktree) ? "" : next
 
     if (project.id && project.id !== "global") {
       await globalSDK.client.project.update({ projectID: project.id, directory: project.worktree, name })
@@ -1406,7 +1405,7 @@ export default function Layout(props: ParentProps) {
   }
 
   const renameWorkspace = (directory: string, next: string, projectId?: string, branch?: string) => {
-    const current = workspaceName(directory, projectId, branch) ?? branch ?? getFilename(directory)
+    const current = workspaceName(directory, projectId, branch) ?? branch ?? workspaceTitle(directory)
     if (current === next) return
     setWorkspaceName(directory, next, projectId, branch)
   }
@@ -1452,6 +1451,7 @@ export default function Layout(props: ParentProps) {
     dialog.show(
       () => (
         <DialogAddProject
+          initialDirectory={stripWorkspace(currentProject()?.worktree ?? currentDir()) || "~"}
           onSelect={(directory, name) => {
             openProject(directory, true, name)
           }}
@@ -1600,7 +1600,7 @@ export default function Layout(props: ParentProps) {
   }
 
   function DialogDeleteWorkspace(props: { root: string; directory: string }) {
-    const name = createMemo(() => getFilename(props.directory))
+    const name = createMemo(() => workspaceTitle(props.directory))
     const [data, setData] = createStore({
       status: "loading" as "loading" | "ready" | "error",
       dirty: false,
@@ -1658,7 +1658,7 @@ export default function Layout(props: ParentProps) {
   }
 
   function DialogResetWorkspace(props: { root: string; directory: string }) {
-    const name = createMemo(() => getFilename(props.directory))
+    const name = createMemo(() => workspaceTitle(props.directory))
     const [state, setState] = createStore({
       status: "loading" as "loading" | "ready" | "error",
       dirty: false,
@@ -2001,7 +2001,7 @@ export default function Layout(props: ParentProps) {
     const projectName = createMemo(() => {
       const item = project()
       if (!item) return ""
-      return item.name || getFilename(item.worktree)
+      return item.name || workspaceTitle(item.worktree)
     })
     const projectId = createMemo(() => project()?.id ?? "")
     const worktree = createMemo(() => project()?.worktree ?? "")
@@ -2068,20 +2068,20 @@ export default function Layout(props: ParentProps) {
                     stopPropagation
                   />
 
-                  <Tooltip
-                    placement="bottom"
-                    gutter={2}
-                    value={worktree()}
-                    class="shrink-0"
-                    contentStyle={{
-                      "max-width": "640px",
+                    <Tooltip
+                      placement="bottom"
+                      gutter={2}
+                      value={stripWorkspace(worktree())}
+                      class="shrink-0"
+                      contentStyle={{
+                        "max-width": "640px",
                       transform: "translate3d(52px, 0, 0)",
                     }}
-                  >
-                    <span class="text-12-regular text-text-base truncate select-text">
-                      {worktree().replace(homedir(), "~")}
-                    </span>
-                  </Tooltip>
+                    >
+                      <span class="text-12-regular text-text-base truncate select-text">
+                        {stripWorkspace(worktree()).replace(homedir(), "~")}
+                      </span>
+                    </Tooltip>
                 </div>
 
                 <DropdownMenu modal={!sidebarHovering()}>
@@ -2174,7 +2174,6 @@ export default function Layout(props: ParentProps) {
                       >
                         {language.t("command.session.new")}
                       </Button>
-                      <GridToggleItem mobile={panelProps.mobile} sidebarExpanded={() => true} />
                     </div>
                     <div class="flex-1 min-h-0">
                       <LocalWorkspace
@@ -2202,7 +2201,6 @@ export default function Layout(props: ParentProps) {
                     >
                       {language.t("workspace.new")}
                     </Button>
-                    <GridToggleItem mobile={panelProps.mobile} sidebarExpanded={() => true} />
                   </div>
                   <div class="relative flex-1 min-h-0">
                     <DragDropProvider

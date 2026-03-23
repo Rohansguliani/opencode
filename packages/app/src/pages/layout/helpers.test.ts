@@ -115,6 +115,10 @@ describe("layout workspace helpers", () => {
     expect(workspaceKey("C:///")).toBe("C:/")
   })
 
+  test("keeps logical workspace ids in workspace key", () => {
+    expect(workspaceKey("/tmp/demo/?workspace=wrk_123")).toBe("/tmp/demo?workspace=wrk_123")
+  })
+
   test("keeps local first while preserving known order", () => {
     const result = effectiveWorkspaceOrder("/root", ["/root", "/b", "/c"], ["/root", "/c", "/a", "/b"])
     expect(result).toEqual(["/root", "/c", "/b"])
@@ -142,6 +146,33 @@ describe("layout workspace helpers", () => {
     )
 
     expect(result?.id).toBe("workspace")
+  })
+
+  test("filters sessions by logical workspace id", () => {
+    const result = latestRootSession(
+      [
+        {
+          path: { directory: "/root?workspace=wrk_a" },
+          session: [
+            session({
+              id: "a",
+              directory: "/root",
+              workspaceID: "wrk_a",
+              time: { created: 1, updated: 1, archived: undefined },
+            }),
+            session({
+              id: "b",
+              directory: "/root",
+              workspaceID: "wrk_b",
+              time: { created: 2, updated: 2, archived: undefined },
+            }),
+          ],
+        },
+      ],
+      120_000,
+    )
+
+    expect(result?.id).toBe("a")
   })
 
   test("detects project permissions with a filter", () => {
@@ -201,6 +232,7 @@ describe("layout workspace helpers", () => {
   test("formats fallback project display name", () => {
     expect(displayName({ worktree: "/tmp/app" })).toBe("app")
     expect(displayName({ worktree: "/tmp/app", name: "My App" })).toBe("My App")
+    expect(displayName({ worktree: "/tmp/app?workspace=wrk_123" })).toBe("app")
   })
 
   test("extracts api error message and fallback", () => {

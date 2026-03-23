@@ -35,6 +35,32 @@ const tauriApi = () => (window as unknown as { __TAURI__?: TauriApi }).__TAURI__
 const currentDesktopWindow = () => tauriApi()?.window?.getCurrentWindow?.()
 const currentThemeWindow = () => tauriApi()?.webviewWindow?.getCurrentWebviewWindow?.()
 
+function GridModeToggle(props: { active: boolean; toggle: () => void }) {
+  return (
+    <Tooltip placement="bottom" value="Grid Mode" openDelay={2000}>
+      <button
+        type="button"
+        class="hidden xl:flex items-center gap-3 rounded-xl px-2 py-1.5 transition-colors hover:bg-surface-base-hover focus:outline-none focus-visible:bg-surface-base-hover"
+        onClick={props.toggle}
+        aria-pressed={props.active}
+        aria-label="Toggle Grid Mode"
+      >
+        <div class="flex flex-col items-start justify-center gap-px pt-px pb-0.5 leading-none">
+          <span class="text-[11px] font-medium leading-none text-text-strong">Grid</span>
+          <span class="text-[11px] font-medium leading-none text-text-strong">Mode</span>
+        </div>
+        <span
+          class={`relative flex h-6 w-11 items-center rounded-full border transition-all ${props.active ? "border-transparent bg-surface-brand-base" : "border-border-weak-base bg-surface-raised-base"}`}
+        >
+          <span
+            class={`absolute size-4 rounded-full bg-background-base shadow-xs transition-transform ${props.active ? "translate-x-[22px]" : "translate-x-[3px]"}`}
+          />
+        </span>
+      </button>
+    </Tooltip>
+  )
+}
+
 export function Titlebar() {
   const layout = useLayout()
   const platform = usePlatform()
@@ -48,7 +74,6 @@ export function Titlebar() {
 
   const mac = createMemo(() => platform.platform === "desktop" && platform.os === "macos")
   const windows = createMemo(() => platform.platform === "desktop" && platform.os === "windows")
-  const web = createMemo(() => platform.platform === "web")
   const zoom = () => platform.webviewZoom?.() ?? 1
   const minHeight = () => (mac() ? `${40 / zoom()}px` : undefined)
 
@@ -200,93 +225,72 @@ export function Titlebar() {
           </div>
         </Show>
         <div class="flex items-center gap-1 shrink-0">
-          <TooltipKeybind
-            class={web() ? "hidden xl:flex shrink-0 ml-14" : "hidden xl:flex shrink-0 ml-2"}
-            placement="bottom"
-            title={language.t("command.sidebar.toggle")}
-            keybind={command.keybind("sidebar.toggle")}
-          >
-            <Button
-              variant="ghost"
-              class="group/sidebar-toggle titlebar-icon w-8 h-6 p-0 box-border"
-              onClick={layout.sidebar.toggle}
-              aria-label={language.t("command.sidebar.toggle")}
-              aria-expanded={layout.sidebar.opened()}
+          <div class="hidden xl:flex w-12 shrink-0 justify-center">
+            <TooltipKeybind
+              class="shrink-0"
+              placement="bottom"
+              title={language.t("command.sidebar.toggle")}
+              keybind={command.keybind("sidebar.toggle")}
             >
-              <Icon size="small" name={layout.sidebar.opened() ? "sidebar-active" : "sidebar"} />
-            </Button>
-          </TooltipKeybind>
-          <div class="hidden xl:flex items-center shrink-0">
-            <Show when={params.dir}>
-              <div
-                class="flex items-center shrink-0 w-8 mr-1"
-                aria-hidden={layout.sidebar.opened() ? "true" : undefined}
+              <Button
+                variant="ghost"
+                class="group/sidebar-toggle titlebar-icon w-8 h-6 p-0 box-border"
+                onClick={layout.sidebar.toggle}
+                aria-label={language.t("command.sidebar.toggle")}
+                aria-expanded={layout.sidebar.opened()}
               >
-                <div
-                  class="transition-opacity"
-                  classList={{
-                    "opacity-100 duration-120 ease-out": !layout.sidebar.opened(),
-                    "opacity-0 duration-120 ease-in delay-0 pointer-events-none": layout.sidebar.opened(),
-                  }}
-                >
-                  <TooltipKeybind
-                    placement="bottom"
-                    title={language.t("command.session.new")}
-                    keybind={command.keybind("session.new")}
-                    openDelay={2000}
-                  >
-                    <Button
-                      variant="ghost"
-                      icon={creating() ? "new-session-active" : "new-session"}
-                      class="titlebar-icon w-8 h-6 p-0 box-border"
-                      disabled={layout.sidebar.opened()}
-                      tabIndex={layout.sidebar.opened() ? -1 : undefined}
-                      onClick={() => {
-                        if (!params.dir) return
-                        if (layout.sidebar.gridMode() && searchParams.grid) {
-                          navigate(`/${params.dir}/session?grid=${searchParams.grid},`)
-                        } else {
-                          navigate(`/${params.dir}/session`)
-                        }
-                      }}
-                      aria-label={language.t("command.session.new")}
-                      aria-current={creating() ? "page" : undefined}
-                    />
-                  </TooltipKeybind>
-                </div>
-              </div>
-            </Show>
-            <div
-              class="flex items-center gap-0 transition-transform"
-              classList={{
-                "translate-x-0": !layout.sidebar.opened(),
-                "-translate-x-[36px]": layout.sidebar.opened(),
-                "duration-180 ease-out": !layout.sidebar.opened(),
-                "duration-180 ease-in": layout.sidebar.opened(),
-              }}
-            >
-              <Tooltip placement="bottom" value={language.t("common.goBack")} openDelay={2000}>
-                <Button
-                  variant="ghost"
-                  icon="chevron-left"
-                  class="titlebar-icon w-6 h-6 p-0 box-border"
-                  disabled={!canBack()}
-                  onClick={back}
-                  aria-label={language.t("common.goBack")}
-                />
-              </Tooltip>
-              <Tooltip placement="bottom" value={language.t("common.goForward")} openDelay={2000}>
-                <Button
-                  variant="ghost"
-                  icon="chevron-right"
-                  class="titlebar-icon w-6 h-6 p-0 box-border"
-                  disabled={!canForward()}
-                  onClick={forward}
-                  aria-label={language.t("common.goForward")}
-                />
-              </Tooltip>
-            </div>
+                <Icon size="small" name={layout.sidebar.opened() ? "sidebar-active" : "sidebar"} />
+              </Button>
+            </TooltipKeybind>
           </div>
+          <div class="hidden xl:flex items-center gap-0 shrink-0">
+            <Tooltip placement="bottom" value={language.t("common.goBack")} openDelay={2000}>
+              <Button
+                variant="ghost"
+                icon="chevron-left"
+                class="titlebar-icon w-6 h-6 p-0 box-border"
+                disabled={!canBack()}
+                onClick={back}
+                aria-label={language.t("common.goBack")}
+              />
+            </Tooltip>
+            <Tooltip placement="bottom" value={language.t("common.goForward")} openDelay={2000}>
+              <Button
+                variant="ghost"
+                icon="chevron-right"
+                class="titlebar-icon w-6 h-6 p-0 box-border"
+                disabled={!canForward()}
+                onClick={forward}
+                aria-label={language.t("common.goForward")}
+              />
+            </Tooltip>
+          </div>
+          <GridModeToggle active={layout.sidebar.gridMode()} toggle={layout.sidebar.toggleGridMode} />
+          <Show when={params.dir}>
+            <TooltipKeybind
+              class="hidden xl:flex shrink-0"
+              placement="bottom"
+              title={language.t("command.session.new")}
+              keybind={command.keybind("session.new")}
+              openDelay={2000}
+            >
+              <Button
+                variant="ghost"
+                icon={creating() ? "new-session-active" : "new-session"}
+                class="titlebar-icon w-8 h-6 p-0 box-border"
+                onClick={() => {
+                  if (!params.dir) return
+                  if (layout.sidebar.gridMode() && searchParams.grid) {
+                    navigate(`/${params.dir}/session?grid=${searchParams.grid},`)
+                    return
+                  }
+                  navigate(`/${params.dir}/session`)
+                }}
+                aria-label={language.t("command.session.new")}
+                aria-current={creating() ? "page" : undefined}
+              />
+            </TooltipKeybind>
+          </Show>
         </div>
         <div id="opencode-titlebar-left" class="flex items-center gap-3 min-w-0 px-2" />
       </div>

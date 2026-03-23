@@ -4,7 +4,6 @@ import { createStore } from "solid-js/store"
 import { createSortable } from "@thisbeyond/solid-dnd"
 import { createMediaQuery } from "@solid-primitives/media"
 import { base64Encode } from "@opencode-ai/util/encode"
-import { getFilename } from "@opencode-ai/util/path"
 import { Button } from "@opencode-ai/ui/button"
 import { Collapsible } from "@opencode-ai/ui/collapsible"
 import { DropdownMenu } from "@opencode-ai/ui/dropdown-menu"
@@ -13,10 +12,12 @@ import { IconButton } from "@opencode-ai/ui/icon-button"
 import { Spinner } from "@opencode-ai/ui/spinner"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { type Session } from "@opencode-ai/sdk/v2/client"
+import { ROOT_SESSION_PAGE_LIMIT } from "@/context/global-sync/types"
 import { useLayout, type LocalProject } from "@/context/layout"
 import { useGlobalSync } from "@/context/global-sync"
 import { useLanguage } from "@/context/language"
-import { NewSessionItem, GridToggleItem, SessionItem, SessionSkeleton } from "./sidebar-items"
+import { workspaceTitle } from "@/utils/workspace"
+import { NewSessionItem, SessionItem, SessionSkeleton } from "./sidebar-items"
 import { childMapByParent, sortedRootSessions } from "./helpers"
 
 type InlineEditorComponent = (props: {
@@ -112,7 +113,7 @@ const WorkspaceHeader = (props: {
       when={!props.local()}
       fallback={
         <span class="text-14-medium text-text-base min-w-0 truncate">
-          {props.branch() ?? getFilename(props.directory)}
+          {props.branch() ?? workspaceTitle(props.directory)}
         </span>
       }
     >
@@ -374,7 +375,7 @@ export const SortableWorkspace = (props: {
   const active = createMemo(() => props.ctx.currentDir() === props.directory)
   const workspaceValue = createMemo(() => {
     const branch = workspaceStore.vcs?.branch
-    const name = branch ?? getFilename(props.directory)
+    const name = branch ?? workspaceTitle(props.directory)
     return props.ctx.workspaceName(props.directory, props.project.id, branch) ?? name
   })
   const open = createMemo(() => props.ctx.workspaceExpanded(props.directory, local()))
@@ -387,8 +388,12 @@ export const SortableWorkspace = (props: {
   const touch = createMediaQuery("(hover: none)")
   const showNew = createMemo(() => !loading() && (touch() || sessions().length === 0 || (active() && !params.id)))
   const loadMore = async () => {
-    setWorkspaceStore("limit", (limit) => (limit ?? 0) + 5)
+    const prev = sessions().length
+    setWorkspaceStore("limit", (limit) => (limit ?? 0) + ROOT_SESSION_PAGE_LIMIT)
     await globalSync.project.loadSessions(props.directory)
+    const next = sessions().length
+    if (next > prev) return
+    setWorkspaceStore("sessionTotal", next)
   }
 
   const workspaceEditActive = createMemo(() => props.ctx.editorOpen(`workspace:${props.directory}`))
@@ -529,8 +534,12 @@ export const LocalWorkspace = (props: {
   const loading = createMemo(() => !booted() && sessions().length === 0)
   const hasMore = createMemo(() => workspace().store.sessionTotal > sessions().length)
   const loadMore = async () => {
-    workspace().setStore("limit", (limit) => (limit ?? 0) + 5)
+    const prev = sessions().length
+    workspace().setStore("limit", (limit) => (limit ?? 0) + ROOT_SESSION_PAGE_LIMIT)
     await globalSync.project.loadSessions(props.project.worktree)
+    const next = sessions().length
+    if (next > prev) return
+    workspace().setStore("sessionTotal", next)
   }
 
   return (

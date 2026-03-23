@@ -19,6 +19,11 @@ export function createOpencodeClient(config?: Config & { directory?: string; exp
   }
 
   if (config?.directory) {
+    if (config.directory.includes('?workspace=')) {
+      const parts = config.directory.split('?workspace=');
+      config.directory = parts[0];
+      config.experimental_workspaceID = parts[1];
+    }
     const isNonASCII = /[^\x00-\x7F]/.test(config.directory)
     const encodedDirectory = isNonASCII ? encodeURIComponent(config.directory) : config.directory
     config.headers = {

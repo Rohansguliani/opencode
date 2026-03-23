@@ -59,7 +59,7 @@ export namespace Workspace {
     const id = WorkspaceID.ascending(input.id)
     const adaptor = await getAdaptor(input.type)
 
-    const config = await adaptor.configure({ ...input, id, name: input.name ?? null, directory: input.directory ?? null })
+    const config = await adaptor.configure({ ...input, branch: input.branch ?? null, extra: input.extra ?? null, id, name: input.name ?? null, directory: input.directory ?? null })
 
     const info: Info = {
       id,

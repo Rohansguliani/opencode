@@ -37,13 +37,19 @@ Power users frequently juggle multiple contexts (e.g. looking at a chat with bac
 - **Auto-Focus Prompt**: When a tile becomes the active session (either by clicking or hovering), the prompt input text box automatically receives focus and places the cursor right back to exactly where the user left off typing, allowing for immediate text entry.
 
 ### 4. Sidebar & UI Integration
-- Added `<GridToggleItem>` strictly beneath the "New session" buttons in both the expanded Workspace Panel and the hoverable Project Rail.
+- Initially added `<GridToggleItem>` beneath the "New session" buttons in the workspace sidebar and hoverable Project Rail.
 - Updated `SessionItem`'s `onClick` handler to intelligently manage the `?grid` URL array (pushing new IDs, popping existing ones) when Grid Mode is active.
 - **New Session Grid Append**: Clicking "New Session" while Grid Mode is enabled gracefully appends an empty placeholder slot to the grid array instead of destroying the grid layout. When the user submits their first prompt, the newly generated session ID seamlessly replaces the placeholder slot directly inside the grid view.
 - Updated `isActive` computations in the sidebar so *all* currently tiled sessions appear highlighted, rather than just the primary one.
 - Replaced the bulky "Close" button with a sleek, low-profile "x" icon (`IconButton`) in the top-right corner of each grid tile for quick deselection.
 
-### 5. Glitch Resolution
+### 5. Logical Workspace Foundation
+- Introduced a logical workspace path model built on top of the physical directory, using `?workspace=<id>` as the identity suffix passed through routing and SDK calls.
+- Fixed the server, path bootstrap, and project/session loading flow so logical workspaces keep isolated session state without pretending the suffixed path is a real directory on disk.
+- Ensured display helpers always strip the logical suffix when deriving project names, labels, tooltips, and path text.
+- Aligned workspace-scoped session visibility with `session.workspaceID`, preventing chats from bleeding between logical workspaces that share the same physical folder.
+
+### 6. Glitch Resolution
 - **Tooltip DOM Error**: Fixed a SolidJS `HierarchyRequestError` that fired when collapsing the sidebar by refactoring how the `<Tooltip>` components swap DOM nodes with their fallbacks.
 - **Title Bar Jumble**: Fixed a bug where multiple tiled sessions were all simultaneously trying to use React Portals to render their `<SessionHeader>` action buttons (like "Open in Cursor") into the global top `<Titlebar>`. Now, only the actively focused session (matching `params.id`) mounts to the header.
 - **searchParams Runtime Crash & Build Failure**: Resolved a `ReferenceError: searchParams is not defined` crash that occurred when clicking sessions in the sidebar with grid mode active. This required properly initializing `useSearchParams` within the `SessionRow` and `SessionItem` components, as well as fixing a missing `useParams` import in `session-header.tsx` that was silently failing the build and preventing the fix from loading.
@@ -53,6 +59,18 @@ Power users frequently juggle multiple contexts (e.g. looking at a chat with bac
 
 - **Grid State Persistence Across Workspaces**: Integrated `searchParams.grid` directly into the `layout.tsx` core layout router. `lastProjectSession` now proactively saves and tracks the specific grid array state for every active project/workspace on the fly. When switching contexts, navigating back to a workspace fully restores its respective saved Grid Mode layout without dropping tiled sessions.
 - **Grid Mode Cross-Workspace Bleed Fix**: Resolved an edge-case bug where clicking a session item under a different workspace header in the sidebar while in Grid Mode would append that ID into the current workspace's grid URL array. Session selection correctly ignores the current grid state when navigating between entirely different workspaces.
+
+### 7. Follow-Up Polish After Dogfooding
+- Reworked Add Workspace into a single native-feeling picker flow: the directory browser now lives inside the same modal as the optional workspace name field instead of bouncing through a second dialog.
+- Cleaned workspace path presentation so UI surfaces show the real folder path rather than the logical workspace suffix.
+- Moved Grid Mode out of the sidebar and into the titlebar as a compact toggle next to sidebar/back/forward controls.
+- Updated workspace hover cards to show both the project path and recently updated chats, rather than only favoring pinned sessions.
+- Fixed sidebar session boot behavior so initial ordering is stable, the default page size is 10, and false-positive `Load more` states are removed when archived/hidden chats are not actually visible.
+
+## Supplemental Notes
+- `notes/feats/multiGridView/logical-workspaces.md`
+- `notes/feats/multiGridView/workspace-creation-and-ui.md`
+- `notes/feats/multiGridView/sidebar-session-behavior.md`
 
 ## Next Steps / Future Polish
 - Implementing draggable/resizable splitters between the grid tiles (potentially migrating from native CSS Grid to a dedicated split-pane library like `allotment`).
