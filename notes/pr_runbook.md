@@ -68,6 +68,8 @@ For bug reports, include:
 
 Prefer verifying on the clean branch too, not only on the local testing branch.
 
+For machine-specific ingress and port mapping on this ThinkPad, use `notes/thinkpadMachine/architecture_truth.md`.
+
 Common commands:
 
 ```bash

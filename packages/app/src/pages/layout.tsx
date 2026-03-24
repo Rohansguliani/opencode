@@ -96,7 +96,7 @@ export default function Layout(props: ParentProps) {
   const [store, setStore, , ready] = persisted(
     Persist.global("layout.page", ["layout.page.v1"]),
     createStore({
-      lastProjectSession: {} as { [directory: string]: { directory: string; id: string; grid?: string; at: number } },
+      lastProjectSession: {} as { [directory: string]: { directory: string; id: string; grid?: string; strip?: string; at: number } },
       activeProject: undefined as string | undefined,
       activeWorkspace: undefined as string | undefined,
       workspaceOrder: {} as Record<string, string[]>,
@@ -112,7 +112,7 @@ export default function Layout(props: ParentProps) {
   let scrollContainerRef: HTMLDivElement | undefined
 
   const params = useParams()
-  const [searchParams] = useSearchParams<{ grid?: string }>()
+  const [searchParams] = useSearchParams<{ grid?: string; strip?: string }>()
   const globalSDK = useGlobalSDK()
   const globalSync = useGlobalSync()
   const layout = useLayout()
@@ -1248,7 +1248,13 @@ export default function Layout(props: ParentProps) {
   }
 
   function rememberSessionRoute(directory: string, id: string, root = activeProjectRoot(directory)) {
-    setStore("lastProjectSession", root, { directory, id, grid: searchParams.grid, at: Date.now() })
+    setStore("lastProjectSession", root, {
+      directory,
+      id,
+      grid: searchParams.grid,
+      strip: searchParams.strip,
+      at: Date.now(),
+    })
     return root
   }
 
@@ -1294,13 +1300,23 @@ export default function Layout(props: ParentProps) {
       dirs = effectiveWorkspaceOrder(root, [root, ...listed], store.workspaceOrder[root])
       return canOpen(target)
     }
-    const openSession = async (target: { directory: string; id: string; grid?: string }) => {
+    const openSession = async (target: { directory: string; id: string; grid?: string; strip?: string }) => {
       if (!canOpen(target.directory)) return false
       const [data] = globalSync.child(target.directory, { bootstrap: false })
       if (data.session.some((item) => item.id === target.id)) {
-        setStore("lastProjectSession", root, { directory: target.directory, id: target.id, grid: target.grid, at: Date.now() })
-        const gridParam = layout.sidebar.gridMode() && target.grid ? `?grid=${target.grid}` : ""
-        navigateWithSidebarReset(`/${base64Encode(target.directory)}/session/${target.id}${gridParam}`)
+        setStore("lastProjectSession", root, {
+          directory: target.directory,
+          id: target.id,
+          grid: target.grid,
+          strip: target.strip,
+          at: Date.now(),
+        })
+        const query = layout.sidebar.gridMode() && target.grid
+          ? `?grid=${target.grid}`
+          : layout.sidebar.niriMode() && target.strip
+            ? `?strip=${target.strip}`
+            : ""
+        navigateWithSidebarReset(`/${base64Encode(target.directory)}/session/${target.id}${query}`)
         return true
       }
       const resolved = await globalSDK.client.session
@@ -1309,9 +1325,19 @@ export default function Layout(props: ParentProps) {
         .catch(() => undefined)
       if (!resolved?.directory) return false
       if (!canOpen(resolved.directory)) return false
-      setStore("lastProjectSession", root, { directory: resolved.directory, id: resolved.id, grid: target.grid, at: Date.now() })
-      const gridParam = layout.sidebar.gridMode() && target.grid ? `?grid=${target.grid}` : ""
-      navigateWithSidebarReset(`/${base64Encode(resolved.directory)}/session/${resolved.id}${gridParam}`)
+      setStore("lastProjectSession", root, {
+        directory: resolved.directory,
+        id: resolved.id,
+        grid: target.grid,
+        strip: target.strip,
+        at: Date.now(),
+      })
+      const query = layout.sidebar.gridMode() && target.grid
+        ? `?grid=${target.grid}`
+        : layout.sidebar.niriMode() && target.strip
+          ? `?strip=${target.strip}`
+          : ""
+      navigateWithSidebarReset(`/${base64Encode(resolved.directory)}/session/${resolved.id}${query}`)
       return true
     }
 
@@ -1740,8 +1766,8 @@ export default function Layout(props: ParentProps) {
 
   createEffect(
     on(
-      () => [pageReady(), params.dir, params.id, searchParams.grid, currentProject()?.worktree] as const,
-      ([ready, dir, id, grid]) => {
+      () => [pageReady(), params.dir, params.id, searchParams.grid, searchParams.strip, currentProject()?.worktree] as const,
+      ([ready, dir, id, grid, strip]) => {
         if (!ready || !dir) {
           activeRoute.session = ""
           activeRoute.sessionProject = ""
@@ -1759,7 +1785,7 @@ export default function Layout(props: ParentProps) {
           return
         }
 
-        const session = `${dir}/${id}?grid=${grid ?? ""}`
+        const session = `${dir}/${id}?grid=${grid ?? ""}&strip=${strip ?? ""}`
         if (session !== activeRoute.session) {
           activeRoute.session = session
           activeRoute.sessionProject = syncSessionRoute(directory, id, root)
@@ -2165,11 +2191,17 @@ export default function Layout(props: ParentProps) {
                         onClick={() => {
                           const dir = worktree()
                           if (!dir) return
-                          if (layout.sidebar.gridMode() && searchParams.grid) {
-                            navigateWithSidebarReset(`/${base64Encode(dir)}/session?grid=${searchParams.grid},`)
-                          } else {
-                            navigateWithSidebarReset(`/${base64Encode(dir)}/session`)
+                          const value = layout.sidebar.gridMode()
+                            ? searchParams.grid ?? params.id
+                            : layout.sidebar.niriMode()
+                              ? searchParams.strip ?? params.id
+                              : undefined
+                          if (value !== undefined) {
+                            const key = layout.sidebar.gridMode() ? "grid" : "strip"
+                            navigateWithSidebarReset(`/${base64Encode(dir)}/session?${key}=${value},`)
+                            return
                           }
+                          navigateWithSidebarReset(`/${base64Encode(dir)}/session`)
                         }}
                       >
                         {language.t("command.session.new")}

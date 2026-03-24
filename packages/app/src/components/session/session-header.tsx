@@ -264,17 +264,19 @@ export function SessionHeader() {
   }
 
   const routerParams = useParams()
+  const active = createMemo(() => routerParams.id || undefined)
+  const session = createMemo(() => params.id || undefined)
 
   const centerMount = createMemo(() => {
-    if (layout.sidebar.gridMode()) {
-      // In grid mode, only mount to title bar if we are the actively focused session
-      if (routerParams.id !== params.id) return null
+    if (layout.sidebar.multiMode()) {
+      // In multi-session layouts, only mount to title bar if we are the focused session.
+      if (active() !== session()) return null
     }
     return document.getElementById("opencode-titlebar-center")
   })
   const rightMount = createMemo(() => {
-    if (layout.sidebar.gridMode()) {
-      if (routerParams.id !== params.id) return null
+    if (layout.sidebar.multiMode()) {
+      if (active() !== session()) return null
     }
     return document.getElementById("opencode-titlebar-right")
   })

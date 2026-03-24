@@ -1,21 +1,14 @@
-# Opencode Dev Environment
+# Opencode Environment
 
-## Overview
-This is a personal, isolated development instance of OpenCode, running independently of the primary production instance.
+For this machine, the canonical port and ingress mapping lives in `notes/thinkpadMachine/architecture_truth.md`.
 
-## Production (Tailscale)
-- **Port:** 4096
-- **Status:** Main systemd service, accessed via Tailscale Funnel.
-- **URL:** https://rohansguliani-thinkpad-x1-yoga-gen-8.tail77ef27.ts.net/
+## Quick Summary
 
-## Development (Ngrok)
-- **Backend Port:** 4097
-- **Public URL:** https://muscular-rema-unshaved.ngrok-free.dev
-- **Status:** Manual process, see ~/opencode_notes/OpenCode Dev Instance Setup.md for startup commands.
+- Production remote access: Zrok -> `4097`
+- Development remote access: Tailscale Funnel -> `5000`
+- Baseline local systemd service: `4096`
+- Optional local Vite UI dev server: `4444`
 
-## Important Note
-The dev and production instances currently share the same database (`~/.local/share/opencode/opencode.db`).
-Use a separate workspace manually to avoid polluting production sessions.
+## Important
 
-## Commands
-See full documentation in: `~/opencode_notes/OpenCode Dev Instance Setup.md`
+Older notes may still mention the pre-inversion setup where Tailscale pointed at production and the dev instance used a different public tunnel. On this ThinkPad, do not trust those older assumptions over `notes/thinkpadMachine/architecture_truth.md`.

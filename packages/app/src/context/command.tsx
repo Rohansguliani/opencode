@@ -43,6 +43,7 @@ function actionId(id: string) {
 function normalizeKey(key: string) {
   if (key === ",") return "comma"
   if (key === "+") return "plus"
+  if (key === "-" || key === "_") return "minus"
   if (key === " ") return "space"
   return key.toLowerCase()
 }
@@ -186,10 +187,11 @@ export function formatKeybind(config: string, t?: (key: KeyLabel) => string): st
       arrowup: "↑",
       arrowdown: "↓",
       arrowleft: "←",
-      arrowright: "→",
-      comma: ",",
-      plus: "+",
-    }
+        arrowright: "→",
+        comma: ",",
+        plus: "+",
+        minus: "-",
+      }
     const named: Record<string, KeyLabel> = {
       backspace: "common.key.backspace",
       delete: "common.key.delete",

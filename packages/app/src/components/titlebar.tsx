@@ -1,4 +1,4 @@
-import { createEffect, createMemo, onCleanup, Show, untrack } from "solid-js"
+import { createEffect, createMemo, For, Show, untrack } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useLocation, useNavigate, useParams, useSearchParams } from "@solidjs/router"
 import { IconButton } from "@opencode-ai/ui/icon-button"
@@ -7,10 +7,14 @@ import { Button } from "@opencode-ai/ui/button"
 import { Tooltip, TooltipKeybind } from "@opencode-ai/ui/tooltip"
 import { useTheme } from "@opencode-ai/ui/theme"
 
+import { useGlobalSync } from "@/context/global-sync"
 import { useLayout } from "@/context/layout"
 import { usePlatform } from "@/context/platform"
 import { useCommand } from "@/context/command"
 import { useLanguage } from "@/context/language"
+import { sortedRootSessions } from "@/pages/layout/helpers"
+import { decode64 } from "@/utils/base64"
+import { type SessionMode, sessionMode, sessionValue } from "@/utils/session-layout"
 import { applyPath, backPath, forwardPath } from "./titlebar-history"
 
 type TauriDesktopWindow = {
@@ -35,19 +39,19 @@ const tauriApi = () => (window as unknown as { __TAURI__?: TauriApi }).__TAURI__
 const currentDesktopWindow = () => tauriApi()?.window?.getCurrentWindow?.()
 const currentThemeWindow = () => tauriApi()?.webviewWindow?.getCurrentWebviewWindow?.()
 
-function GridModeToggle(props: { active: boolean; toggle: () => void }) {
+function ModeToggle(props: { active: boolean; label: string; toggle: () => void }) {
+  const lines = () => props.label.split(" ")
   return (
-    <Tooltip placement="bottom" value="Grid Mode" openDelay={2000}>
+    <Tooltip placement="bottom" value={props.label} openDelay={2000}>
       <button
         type="button"
         class="hidden xl:flex items-center gap-3 rounded-xl px-2 py-1.5 transition-colors hover:bg-surface-base-hover focus:outline-none focus-visible:bg-surface-base-hover"
         onClick={props.toggle}
         aria-pressed={props.active}
-        aria-label="Toggle Grid Mode"
+        aria-label={`Toggle ${props.label}`}
       >
         <div class="flex flex-col items-start justify-center gap-px pt-px pb-0.5 leading-none">
-          <span class="text-[11px] font-medium leading-none text-text-strong">Grid</span>
-          <span class="text-[11px] font-medium leading-none text-text-strong">Mode</span>
+          <For each={lines()}>{(line) => <span class="text-[11px] font-medium leading-none text-text-strong">{line}</span>}</For>
         </div>
         <span
           class={`relative flex h-6 w-11 items-center rounded-full border transition-all ${props.active ? "border-transparent bg-surface-brand-base" : "border-border-weak-base bg-surface-raised-base"}`}
@@ -67,8 +71,9 @@ export function Titlebar() {
   const command = useCommand()
   const language = useLanguage()
   const theme = useTheme()
+  const sync = useGlobalSync()
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams<{ grid?: string }>()
+  const [searchParams, setSearchParams] = useSearchParams<{ grid?: string; strip?: string }>()
   const location = useLocation()
   const params = useParams()
 
@@ -84,6 +89,19 @@ export function Titlebar() {
   })
 
   const path = () => `${location.pathname}${location.search}${location.hash}`
+  const mode = createMemo(() => sessionMode(layout.sidebar))
+  const dir = createMemo(() => decode64(params.dir) ?? "")
+  const store = createMemo(() => {
+    if (!dir()) return
+    return sync.child(dir(), { bootstrap: false })[0]
+  })
+  const strip = createMemo(() => {
+    const ids = store()
+      ? sortedRootSessions(store()!, Date.now()).map((item) => item.id)
+      : []
+    if (params.id && !ids.includes(params.id)) ids.unshift(params.id)
+    return [...new Set(ids)]
+  })
   const creating = createMemo(() => {
     if (!params.dir) return false
     if (params.id) return false
@@ -116,6 +134,34 @@ export function Titlebar() {
     if (!next) return
     setHistory(next.state)
     navigate(next.to)
+  }
+
+  const toggleMode = (next: SessionMode) => {
+    const prev = mode()
+    if (prev === next) {
+      layout.sidebar.setMode(undefined)
+      if (searchParams.grid || searchParams.strip) setSearchParams({ grid: undefined, strip: undefined })
+      return
+    }
+
+    layout.sidebar.setMode(next)
+    if (next === "niri") {
+      const ids = strip()
+      const id = params.id ?? ids[0]
+      if (!params.dir || !id || ids.length === 0) {
+        setSearchParams({ grid: undefined, strip: id })
+        return
+      }
+      navigate(`/${params.dir}/session/${id}?strip=${ids.join(",")}`)
+      return
+    }
+
+    const value = sessionValue(prev, searchParams) ?? params.id
+    if (next === "grid") {
+      setSearchParams({ grid: value, strip: undefined })
+      return
+    }
+    setSearchParams({ grid: undefined, strip: value })
   }
 
   command.register(() => [
@@ -265,7 +311,8 @@ export function Titlebar() {
               />
             </Tooltip>
           </div>
-          <GridModeToggle active={layout.sidebar.gridMode()} toggle={layout.sidebar.toggleGridMode} />
+          <ModeToggle active={layout.sidebar.gridMode()} label="Grid Mode" toggle={() => toggleMode("grid")} />
+          <ModeToggle active={layout.sidebar.niriMode()} label="Niri Mode" toggle={() => toggleMode("niri")} />
           <Show when={params.dir}>
             <TooltipKeybind
               class="hidden xl:flex shrink-0"
@@ -280,8 +327,10 @@ export function Titlebar() {
                 class="titlebar-icon w-8 h-6 p-0 box-border"
                 onClick={() => {
                   if (!params.dir) return
-                  if (layout.sidebar.gridMode() && searchParams.grid) {
-                    navigate(`/${params.dir}/session?grid=${searchParams.grid},`)
+                  const value = sessionValue(mode(), searchParams) ?? params.id
+                  if (value) {
+                    const key = layout.sidebar.gridMode() ? "grid" : "strip"
+                    navigate(`/${params.dir}/session?${key}=${value},`)
                     return
                   }
                   navigate(`/${params.dir}/session`)

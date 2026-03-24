@@ -15,6 +15,7 @@ import { type ContextItem, type ImageAttachmentPart, type Prompt, usePrompt } fr
 import { useSDK } from "@/context/sdk"
 import { useSync } from "@/context/sync"
 import { Identifier } from "@/utils/id"
+import { sessionMode } from "@/utils/session-layout"
 import { Worktree as WorktreeState } from "@/utils/worktree"
 import { buildRequestParts } from "./build-request-parts"
 import { setCursorPosition } from "./editor-dom"
@@ -375,17 +376,23 @@ export function createPromptSubmit(input: PromptSubmitInput) {
         local.session.promote(sessionDirectory, session.id)
         layout.handoff.setTabs(base64Encode(sessionDirectory), session.id)
         
-        const grid = new URLSearchParams(window.location.search).get("grid")
-        if (grid) {
-          // If we were part of a grid, preserve the grid array and replace the "new" slot with our real ID
-          const gridArray = grid.split(",")
-          const newIdx = gridArray.indexOf("")
-          if (newIdx !== -1) gridArray[newIdx] = session.id
-          else gridArray.push(session.id)
-          navigate(`/${base64Encode(sessionDirectory)}/session/${session.id}?grid=${gridArray.join(",")}`, { replace: true })
-        } else {
-          navigate(`/${base64Encode(sessionDirectory)}/session/${session.id}`, { replace: true })
+        const search = new URLSearchParams(window.location.search)
+        const mode = sessionMode(layout.sidebar)
+        const key = mode === "grid" ? "grid" : mode === "niri" ? "strip" : undefined
+        if (key) {
+          const value = search.get(key)
+          if (value === null) {
+            navigate(`/${base64Encode(sessionDirectory)}/session/${session.id}`, { replace: true })
+            return
+          }
+          const next = value.split(",")
+          const idx = next.indexOf("")
+          if (idx !== -1) next[idx] = session.id
+          else next.push(session.id)
+          navigate(`/${base64Encode(sessionDirectory)}/session/${session.id}?${key}=${next.join(",")}`, { replace: true })
+          return
         }
+        navigate(`/${base64Encode(sessionDirectory)}/session/${session.id}`, { replace: true })
       }
     }
     if (!session) {

@@ -148,12 +148,19 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
       const sidebar = value.sidebar
       const migratedSidebar = (() => {
         if (!isRecord(sidebar)) return sidebar
-        if (typeof sidebar.workspaces !== "boolean") return { ...sidebar, gridMode: sidebar.gridMode ?? false }
+        if (typeof sidebar.workspaces !== "boolean") {
+          return {
+            ...sidebar,
+            gridMode: sidebar.gridMode ?? false,
+            niriMode: sidebar.niriMode ?? false,
+          }
+        }
         return {
           ...sidebar,
           workspaces: {},
           workspacesDefault: sidebar.workspaces,
           gridMode: sidebar.gridMode ?? false,
+          niriMode: sidebar.niriMode ?? false,
         }
       })()
 
@@ -236,6 +243,7 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
           workspaces: {} as Record<string, boolean>,
           workspacesDefault: false,
           gridMode: false,
+          niriMode: false,
         },
         terminal: {
           height: DEFAULT_TERMINAL_HEIGHT,
@@ -604,8 +612,21 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
           setStore("sidebar", "opened", (x) => !x)
         },
         gridMode: createMemo(() => store.sidebar.gridMode ?? false),
+        niriMode: createMemo(() => store.sidebar.niriMode ?? false),
+        multiMode: createMemo(() => (store.sidebar.gridMode ?? false) || (store.sidebar.niriMode ?? false)),
+        setMode(mode: "grid" | "niri" | undefined) {
+          setStore("sidebar", "gridMode", mode === "grid")
+          setStore("sidebar", "niriMode", mode === "niri")
+        },
         toggleGridMode() {
-          setStore("sidebar", "gridMode", (x) => !x)
+          const next = !(store.sidebar.gridMode ?? false)
+          setStore("sidebar", "gridMode", next)
+          if (next) setStore("sidebar", "niriMode", false)
+        },
+        toggleNiriMode() {
+          const next = !(store.sidebar.niriMode ?? false)
+          setStore("sidebar", "niriMode", next)
+          if (next) setStore("sidebar", "gridMode", false)
         },
         width: createMemo(() => store.sidebar.width),
         resize(width: number) {

@@ -4,7 +4,7 @@
 
 Start with `notes/pr_runbook.md` if you need the exact end-to-end sequence.
 
-When developing new features for OpenCode while relying on a custom local testing setup (like Tailscale with Basic Auth), you must separate your feature code from your local environment code.
+When developing new features for OpenCode while relying on this ThinkPad's custom remote testing setup, you must separate your feature code from your local environment code.
 
 If you commit both to the same branch, your Pull Request will include your personal Tailscale/environment changes, which should not be merged into the main OpenCode repository.
 
@@ -30,16 +30,16 @@ We use a "Y-shaped" branching strategy to solve this:
    ```
 
 3. **Test Locally (CRITICAL: RECOMPILE AND RESTART)**
-    Now your local environment branch contains BOTH your custom testing setup AND the new feature.
+     Now your local environment branch contains BOTH your custom testing setup AND the new feature.
 
-    To see your UI changes via Tailscale, you **MUST** rebuild the frontend and restart the custom backend.
+     On this machine, the development Tailscale Funnel points at the unified server on port `5000`, so you **MUST** rebuild the frontend and restart that server.
 
     Use:
     ```bash
     ./scripts/rebuild-local.sh
     ```
 
-    See `notes/recompiling_local_server.md` for details.
+    See `notes/recompiling_local_server.md` and `notes/thinkpadMachine/architecture_truth.md` for details.
 
 ```text
           /--- [Tailscale Changes] --- [Feature Code (Copied)]  <-- Local Testing Branch

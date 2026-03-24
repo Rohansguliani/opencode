@@ -16,6 +16,7 @@ import { ROOT_SESSION_PAGE_LIMIT } from "@/context/global-sync/types"
 import { useLayout, type LocalProject } from "@/context/layout"
 import { useGlobalSync } from "@/context/global-sync"
 import { useLanguage } from "@/context/language"
+import { sessionMode, sessionQuery, sessionValue } from "@/utils/session-layout"
 import { workspaceTitle } from "@/utils/workspace"
 import { NewSessionItem, SessionItem, SessionSkeleton } from "./sidebar-items"
 import { childMapByParent, sortedRootSessions } from "./helpers"
@@ -483,11 +484,13 @@ export const SortableWorkspace = (props: {
                 setHoverSession={props.ctx.setHoverSession}
                 clearHoverProjectSoon={props.ctx.clearHoverProjectSoon}
                 navigateToNewSession={() => {
-                  if (layout.sidebar.gridMode() && searchParams.grid) {
-                    navigate(`/${slug()}/session?grid=${searchParams.grid},`)
-                  } else {
-                    navigate(`/${slug()}/session`)
+                  const mode = sessionMode(layout.sidebar)
+                  const value = sessionValue(mode, searchParams) ?? (params.dir === slug() ? params.id : undefined)
+                  if (mode && value !== undefined) {
+                    navigate(`/${slug()}/session${sessionQuery(mode, `${value},`)}`)
+                    return
                   }
+                  navigate(`/${slug()}/session`)
                 }}
               />
             </div>

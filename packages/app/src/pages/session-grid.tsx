@@ -1,6 +1,7 @@
 import { For, Show, createSignal, createMemo, Suspense, createEffect, onCleanup } from "solid-js"
 import { useSearchParams, useParams, useNavigate } from "@solidjs/router"
 import { SessionParamsProvider } from "@/hooks/use-session-params"
+import { LocalProvider } from "@/context/local"
 import { TerminalProvider } from "@/context/terminal"
 import { FileProvider } from "@/context/file"
 import { PromptProvider } from "@/context/prompt"
@@ -353,18 +354,20 @@ export function SessionGrid(props: { ids: string[] }) {
                   />
                 </div>
 
-                <SessionParamsProvider dir={params.dir} id={id}>
-                  <TerminalProvider>
-                    <FileProvider>
-                      <PromptProvider>
-                        <CommentsProvider>
-                          <Suspense fallback={<div class="size-full" />}>
-                            <Session />
-                          </Suspense>
-                        </CommentsProvider>
-                      </PromptProvider>
-                    </FileProvider>
-                  </TerminalProvider>
+                <SessionParamsProvider dir={params.dir} id={id || undefined}>
+                  <LocalProvider>
+                    <TerminalProvider>
+                      <FileProvider>
+                        <PromptProvider>
+                          <CommentsProvider>
+                            <Suspense fallback={<div class="size-full" />}>
+                              <Session />
+                            </Suspense>
+                          </CommentsProvider>
+                        </PromptProvider>
+                      </FileProvider>
+                    </TerminalProvider>
+                  </LocalProvider>
                 </SessionParamsProvider>
               </div>
             )

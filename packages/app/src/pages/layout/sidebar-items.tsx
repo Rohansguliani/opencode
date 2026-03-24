@@ -15,6 +15,7 @@ import { getAvatarColors, type LocalProject, useLayout } from "@/context/layout"
 import { useNotification } from "@/context/notification"
 import { usePermission } from "@/context/permission"
 import { messageAgentColor } from "@/utils/agent"
+import { sessionIds, sessionMode, sessionQuery, sessionValue } from "@/utils/session-layout"
 import { isSessionPinned, toggleSessionPinned } from "@/utils/pinned-sessions"
 import { workspaceTitle } from "@/utils/workspace"
 import { sessionPermissionRequest } from "../session/composer/session-request-tree"
@@ -111,7 +112,7 @@ const SessionRow = (props: {
   InlineEditor: typeof import("../layout/inline-editor").createInlineEditorController extends (...args: any[]) => { InlineEditor: infer T } ? T : never
 }): JSX.Element => {
   const layout = useLayout()
-  const [searchParams] = useSearchParams<{ grid?: string }>()
+  const [searchParams] = useSearchParams<{ grid?: string; strip?: string }>()
   const params = useParams()
   const navigate = useNavigate()
 
@@ -130,29 +131,31 @@ const SessionRow = (props: {
         props.clearHoverProjectSoon()
       }
       
-      if (layout.sidebar.gridMode()) {
+      const mode = sessionMode(layout.sidebar)
+      if (mode) {
         if (params.dir !== props.slug) return // Allow default navigation to new workspace
         e.preventDefault()
-        const existing = searchParams.grid ? searchParams.grid.split(",") : (params.id ? [params.id] : [])
+        const existing = sessionIds(mode, searchParams, params.id)
         if (!existing.includes(props.session.id)) {
-          existing.push(props.session.id)
-          const toKeep = existing.slice(-9)
-          navigate(`/${props.slug}/session/${params.id ?? props.session.id}?grid=${toKeep.join(",")}`)
-        } else {
-          // If already in grid, remove it
-          const next = existing.filter(x => x !== props.session.id)
-          if (next.length <= 1) {
-            if (next.length === 1) {
-              navigate(`/${props.slug}/session/${next[0]}`)
-            } else {
-              navigate(`/${props.slug}/session`)
-            }
-          } else if (props.session.id === params.id) {
-            navigate(`/${props.slug}/session/${next[0]}?grid=${next.join(",")}`)
-          } else {
-            navigate(`/${props.slug}/session/${params.id}?grid=${next.join(",")}`)
-          }
+          const next = [...existing, props.session.id].slice(-9)
+          navigate(`/${props.slug}/session/${params.id ?? props.session.id}${sessionQuery(mode, next.join(","))}`)
+          return
         }
+
+        const next = existing.filter((x) => x !== props.session.id)
+        if (next.length <= 1) {
+          if (next.length === 1) {
+            navigate(`/${props.slug}/session/${next[0]}`)
+            return
+          }
+          navigate(`/${props.slug}/session`)
+          return
+        }
+        if (props.session.id === params.id) {
+          navigate(`/${props.slug}/session/${next[0]}${sessionQuery(mode, next.join(","))}`)
+          return
+        }
+        navigate(`/${props.slug}/session/${params.id ?? next[0]}${sessionQuery(mode, next.join(","))}`)
       }
     }}
   >
@@ -270,12 +273,10 @@ export const SessionItem = (props: SessionItemProps): JSX.Element => {
   const hoverReady = createMemo(() => hoverMessages() !== undefined)
   const hoverAllowed = createMemo(() => !props.mobile && props.sidebarExpanded())
   const hoverEnabled = createMemo(() => (props.popover ?? true) && hoverAllowed())
-  const [searchParams] = useSearchParams<{ grid?: string }>()
+  const [searchParams] = useSearchParams<{ grid?: string; strip?: string }>()
   const isActive = createMemo(() => {
-    if (layout.sidebar.gridMode()) {
-      const gridIds = searchParams.grid ? searchParams.grid.split(",") : (params.id ? [params.id] : [])
-      return gridIds.includes(props.session.id)
-    }
+    const mode = sessionMode(layout.sidebar)
+    if (mode) return sessionIds(mode, searchParams, params.id).includes(props.session.id)
     return props.session.id === params.id
   })
   const isPinned = createMemo(() => isSessionPinned(props.session.id))
@@ -438,13 +439,14 @@ export const NewSessionItem = (props: {
 }): JSX.Element => {
   const layout = useLayout()
   const language = useLanguage()
-  const [searchParams] = useSearchParams<{ grid?: string }>()
+  const [searchParams] = useSearchParams<{ grid?: string; strip?: string }>()
+  const params = useParams()
   const label = language.t("command.session.new")
   const tooltip = () => props.mobile || !props.sidebarExpanded()
   const getHref = () => {
-    if (layout.sidebar.gridMode() && searchParams.grid) {
-      return `/${props.slug}/session?grid=${searchParams.grid},`
-    }
+    const mode = sessionMode(layout.sidebar)
+    const value = sessionValue(mode, searchParams) ?? (params.dir === props.slug ? params.id : undefined)
+    if (mode && value !== undefined) return `/${props.slug}/session${sessionQuery(mode, `${value},`)}`
     return `/${props.slug}/session`
   }
   const item = () => (

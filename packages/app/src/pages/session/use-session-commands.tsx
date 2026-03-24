@@ -19,6 +19,7 @@ import { showToast } from "@opencode-ai/ui/toast"
 import { findLast } from "@opencode-ai/util/array"
 import { createSessionTabs } from "@/pages/session/helpers"
 import { extractPromptFromParts } from "@/utils/prompt"
+import { sessionMode, sessionQuery, sessionValue } from "@/utils/session-layout"
 import { UserMessage } from "@opencode-ai/sdk/v2"
 import { useSessionLayout } from "@/pages/session/session-layout"
 
@@ -49,7 +50,7 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
   const terminal = useTerminal()
   const layout = useLayout()
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams<{ grid?: string }>()
+  const [searchParams] = useSearchParams<{ grid?: string; strip?: string }>()
   const { params, tabs, view } = useSessionLayout()
 
   const info = () => {
@@ -251,11 +252,13 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
         keybind: "mod+shift+s",
         slash: "new",
         onSelect: () => {
-          if (layout.sidebar.gridMode() && searchParams.grid) {
-            navigate(`/${params.dir}/session?grid=${searchParams.grid},`)
-          } else {
-            navigate(`/${params.dir}/session`)
+          const mode = sessionMode(layout.sidebar)
+          const value = sessionValue(mode, searchParams) ?? params.id
+          if (mode && value !== undefined) {
+            navigate(`/${params.dir}/session${sessionQuery(mode, `${value},`)}`)
+            return
           }
+          navigate(`/${params.dir}/session`)
         },
       }),
       fileCommand({

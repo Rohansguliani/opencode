@@ -1,67 +1,51 @@
-# Recompiling and Restarting the Local Server (Tailscale Setup)
+# Rebuild Local Tailscale Dev Server
 
-When making changes to the UI or backend on the Tailscale local testing branch (`feat/tailscale-local-serve`), you must recompile the frontend and restart the backend server so the changes take effect over the Tailscale Funnel.
+Use this when testing the machine's development ingress served through the Tailscale Funnel.
 
-> **CRITICAL WARNING:** In `server.ts`, the static path resolution MUST use `path.resolve(__dirname, "../../../app/dist")`. If you accidentally use `process.cwd()`, it will resolve incorrectly, fail silently, and proxy the user to `app.opencode.ai` (the live production server), making it seem like your local changes aren't working.
+The machine-level architecture is documented in `notes/thinkpadMachine/architecture_truth.md`.
 
-**For Future Agents:** If you are asked to "apply changes", "recompile", or "restart the server" for testing, strictly follow these steps.
+## What This Rebuild Does
 
-## 1. Preferred Shortcut
+`./scripts/rebuild-local.sh` updates the development Tailscale path by doing two things:
 
-Use the helper script whenever possible:
+1. rebuilds the frontend into `packages/app/dist`
+2. restarts the unified backend on port `5000`
+
+That `5000` process serves both the built frontend and the API on the same origin.
+
+## Why This Exists
+
+The Tailscale development URL points at `5000`, not `4444`.
+
+- `4444` is only the optional local Vite dev server
+- `5000` is the remote-facing development server for this machine
+- same-origin serving on `5000` avoids the browser Basic Auth issues that happened with split frontend/backend origins
+
+## Preferred Command
 
 ```bash
 cd /home/rohansguliani/dev/opencode
 ./scripts/rebuild-local.sh
 ```
 
-It rebuilds the frontend, restarts the backend, and reads credentials from `~/.profile`.
-
-## 2. Manual Rebuild the Frontend
-
-The frontend must be compiled into static files in the `packages/app/dist` directory. The custom backend server is configured to serve this static directory directly.
+## Manual Equivalent
 
 ```bash
 cd /home/rohansguliani/dev/opencode/packages/app
 ~/.bun/bin/bun run build
-```
 
-## 3. Kill the Existing Backend Process
-
-Find the process running on port `5000` and kill it.
-
-```bash
-# Find the PID
-lsof -i :5000
-
-# Kill the process
-kill <PID>
-```
-
-## 4. Restart the Backend
-
-Start the backend on port `5000` while passing in the Basic Auth credentials via environment variables. It must be run in the background (using `nohup` and `&`) so it doesn't die when the shell session ends.
-
-```bash
 cd /home/rohansguliani/dev/opencode/packages/opencode
-
 . "$HOME/.profile"
 OPENCODE_SERVER_USERNAME="$OPENCODE_LOCAL_USERNAME" OPENCODE_SERVER_PASSWORD="$OPENCODE_LOCAL_PASSWORD" nohup ~/.bun/bin/bun run --conditions=browser ./src/index.ts serve --port 5000 > backend.log 2>&1 &
 ```
 
-## 5. Verify
+## Verification
 
-Ensure the server successfully booted and bound to the port.
+The hardened script now verifies that:
 
-```bash
-# Wait a second for it to boot
-sleep 2
+- `packages/app/dist/index.html` exists after the build
+- port `5000` is actually free before restart
+- the new backend process stays alive during startup
+- `http://127.0.0.1:5000` responds with `200` or `401`
 
-# Check if it's listening on port 5000
-lsof -i :5000
-
-# Check the logs for errors
-cat /home/rohansguliani/dev/opencode/packages/opencode/backend.log
-```
-
-Once this is done, the user can refresh their Tailscale URL (`https://rohansguliani-thinkpad-x1-yoga-gen-8.tail77ef27.ts.net/`) to see the latest changes!
+If the script fails, read `packages/opencode/backend.log`.

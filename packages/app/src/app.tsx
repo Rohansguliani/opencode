@@ -46,6 +46,9 @@ import { TerminalProvider } from "@/context/terminal"
 import DirectoryLayout from "@/pages/directory-layout"
 import Layout from "@/pages/layout"
 import { ErrorPage } from "./pages/error"
+import { SessionGrid } from "./pages/session-grid"
+import { SessionStrip } from "./pages/session-strip"
+import { sessionMode } from "./utils/session-layout"
 import { useCheckServerHealth } from "./utils/server-health"
 
 const Home = lazy(() => import("@/pages/home"))
@@ -58,27 +61,43 @@ const HomeRoute = () => (
   </Suspense>
 )
 
-import { SessionGrid } from "./pages/session-grid"
-
 const SessionRoute = () => {
-  const [searchParams, setSearchParams] = useSearchParams<{ grid?: string }>()
+  const [searchParams, setSearchParams] = useSearchParams<{ grid?: string; strip?: string }>()
   const layout = useLayout()
+  const mode = createMemo(() => sessionMode(layout.sidebar))
   const gridIds = createMemo(() => searchParams.grid ? searchParams.grid.split(",") : [])
+  const stripIds = createMemo(() => searchParams.strip ? searchParams.strip.split(",") : [])
 
   createEffect(() => {
-    if (!layout.sidebar.gridMode() && searchParams.grid) {
-      setSearchParams({ grid: undefined })
+    if (mode() === "grid") {
+      if (searchParams.strip) setSearchParams({ strip: undefined })
+      return
     }
+    if (mode() === "niri") {
+      if (searchParams.grid) setSearchParams({ grid: undefined })
+      return
+    }
+    if (searchParams.grid || searchParams.strip) setSearchParams({ grid: undefined, strip: undefined })
   })
 
   return (
-    <Show when={layout.sidebar.gridMode() && (gridIds().length > 1 || (gridIds().length === 1 && gridIds()[0] === ""))} fallback={
-      <SessionProviders>
-        <Suspense fallback={<Loading />}>
-          <Session />
-        </Suspense>
-      </SessionProviders>
-    }>
+    <Show
+      when={mode() === "grid" && searchParams.grid !== undefined}
+      fallback={
+        <Show
+          when={mode() === "niri" && searchParams.strip !== undefined}
+          fallback={
+            <SessionProviders>
+              <Suspense fallback={<Loading />}>
+                <Session />
+              </Suspense>
+            </SessionProviders>
+          }
+        >
+          <SessionStrip ids={stripIds()} />
+        </Show>
+      }
+    >
       <SessionGrid ids={gridIds()} />
     </Show>
   )

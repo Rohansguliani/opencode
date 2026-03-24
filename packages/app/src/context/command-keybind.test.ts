@@ -24,11 +24,12 @@ describe("command keybind helpers", () => {
   })
 
   test("matchKeybind normalizes punctuation keys", () => {
-    const keybinds = parseKeybind("ctrl+comma, shift+plus, meta+space")
+    const keybinds = parseKeybind("ctrl+comma, shift+plus, meta+space, ctrl+shift+minus")
 
     expect(matchKeybind(keybinds, new KeyboardEvent("keydown", { key: ",", ctrlKey: true }))).toBe(true)
     expect(matchKeybind(keybinds, new KeyboardEvent("keydown", { key: "+", shiftKey: true }))).toBe(true)
     expect(matchKeybind(keybinds, new KeyboardEvent("keydown", { key: " ", metaKey: true }))).toBe(true)
+    expect(matchKeybind(keybinds, new KeyboardEvent("keydown", { key: "_", shiftKey: true, ctrlKey: true }))).toBe(true)
     expect(matchKeybind(keybinds, new KeyboardEvent("keydown", { key: ",", ctrlKey: true, altKey: true }))).toBe(false)
   })
 
