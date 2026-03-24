@@ -4,7 +4,7 @@ import { createStore } from "solid-js/store"
 import { Persist, persisted } from "@/utils/persist"
 import { useCheckServerHealth } from "@/utils/server-health"
 
-type StoredProject = { worktree: string; expanded: boolean; name?: string }
+export type StoredProject = { worktree: string; expanded: boolean; name?: string }
 type StoredServer = string | ServerConnection.HttpBase | ServerConnection.Http
 const HEALTH_POLL_INTERVAL_MS = 10_000
 
@@ -102,7 +102,8 @@ export const { use: useServer, provider: ServerProvider } = createSimpleContext(
       createStore({
         list: [] as StoredServer[],
         projects: {} as Record<string, StoredProject[]>,
-        lastProject: {} as Record<string, string>,
+        favorites: {} as Record<string, string[]>,
+        lastProject: {} as Record<string, string | undefined>,
       }),
     )
 
@@ -293,6 +294,35 @@ export const { use: useServer, provider: ServerProvider } = createSimpleContext(
           const key = origin()
           if (!key) return
           setStore("lastProject", key, directory)
+        },
+        favorites() {
+          return store.favorites[origin()] ?? []
+        },
+        isFavorite(directory: string) {
+          return (store.favorites[origin()] ?? []).includes(directory)
+        },
+        toggleFavorite(directory: string) {
+          const key = origin()
+          if (!key) return
+          const list = store.favorites[key] ?? []
+          if (list.includes(directory)) {
+            setStore("favorites", key, list.filter((item) => item !== directory))
+            return
+          }
+          setStore("favorites", key, [directory, ...list])
+        },
+        restoreFavorites(input: string[]) {
+          const key = origin()
+          if (!key) return
+          setStore("favorites", key, input)
+        },
+        restore(input: { projects: StoredProject[]; last?: string }) {
+          const key = origin()
+          if (!key) return
+          batch(() => {
+            setStore("projects", key, input.projects)
+            setStore("lastProject", key, input.last)
+          })
         },
       },
     }

@@ -1,6 +1,8 @@
 import { splitProps, type ComponentProps } from "solid-js"
 
 const icons = {
+  "star-filled": `<path d="M9.99993 2.08301L12.4244 6.99575L17.8467 7.78364L13.9233 11.607L14.8494 17.0075L9.99993 14.458L5.15046 17.0075L6.07655 11.607L2.1532 7.78364L7.57547 6.99575L9.99993 2.08301Z" fill="currentColor" stroke="currentColor" stroke-linejoin="round"/>`,
+  star: `<path d="M9.99993 2.08301L12.4244 6.99575L17.8467 7.78364L13.9233 11.607L14.8494 17.0075L9.99993 14.458L5.15046 17.0075L6.07655 11.607L2.1532 7.78364L7.57547 6.99575L9.99993 2.08301Z" stroke="currentColor" stroke-linejoin="round"/>`,
   "pin-filled": `<path d="M12.5 7.5L12 3H8L7.5 7.5M7.5 7.5L4 10V11H9.5V17L10 18L10.5 17V11H16V10L12.5 7.5Z" fill="currentColor" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>`,
   pin: `<path d="M12.5 7.5L12 3H8L7.5 7.5M7.5 7.5L4 10V11H9.5V17L10 18L10.5 17V11H16V10L12.5 7.5Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>`,
   "align-right": `<path d="M12.292 6.04167L16.2503 9.99998L12.292 13.9583M2.91699 9.99998H15.6253M17.0837 3.75V16.25" stroke="currentColor" stroke-linecap="square"/>`,

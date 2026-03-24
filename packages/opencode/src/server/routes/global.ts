@@ -10,6 +10,7 @@ import { Log } from "../../util/log"
 import { lazy } from "../../util/lazy"
 import { Config } from "../../config/config"
 import { errors } from "../error"
+import { WorkspaceState } from "../../control-plane/workspace-state"
 
 const log = Log.create({ service: "server" })
 
@@ -151,6 +152,50 @@ export const GlobalRoutes = lazy(() =>
         const config = c.req.valid("json")
         const next = await Config.updateGlobal(config)
         return c.json(next)
+      },
+    )
+    .get(
+      "/workspace-state",
+      describeRoute({
+        summary: "Get workspace state",
+        description: "Retrieve persisted workspace UI state for the current user on this server.",
+        operationId: "global.workspaceState.get",
+        responses: {
+          200: {
+            description: "Workspace state",
+            content: {
+              "application/json": {
+                schema: resolver(WorkspaceState.Info),
+              },
+            },
+          },
+        },
+      }),
+      async (c) => {
+        return c.json(WorkspaceState.get() ?? WorkspaceState.empty())
+      },
+    )
+    .patch(
+      "/workspace-state",
+      describeRoute({
+        summary: "Update workspace state",
+        description: "Persist workspace UI state for the current user on this server.",
+        operationId: "global.workspaceState.update",
+        responses: {
+          200: {
+            description: "Workspace state",
+            content: {
+              "application/json": {
+                schema: resolver(WorkspaceState.Info),
+              },
+            },
+          },
+          ...errors(400),
+        },
+      }),
+      validator("json", WorkspaceState.Info.omit({ actor: true, time: true })),
+      async (c) => {
+        return c.json(await WorkspaceState.put(c.req.valid("json")))
       },
     )
     .post(

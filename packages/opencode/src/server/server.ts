@@ -46,6 +46,7 @@ import { PermissionRoutes } from "./routes/permission"
 import { GlobalRoutes } from "./routes/global"
 import { MDNS } from "./mdns"
 import { lazy } from "@/util/lazy"
+import { ActorContext } from "./actor-context"
 
 // @ts-ignore This global is needed to prevent ai-sdk from logging warnings to stdout https://github.com/vercel/ai/blob/2dc67e0ef538307f21368db32d5a12345d98831b/packages/ai/src/logger/log-warnings.ts#L85
 globalThis.AI_SDK_LOG_WARNINGS = false
@@ -54,6 +55,18 @@ export namespace Server {
   const log = Log.create({ service: "server" })
 
   export const Default = lazy(() => createApp({}))
+
+  function actor(auth?: string) {
+    if (!auth?.startsWith("Basic ")) return "local"
+    try {
+      const raw = Buffer.from(auth.slice(6), "base64").toString("utf8")
+      const idx = raw.indexOf(":")
+      const name = (idx === -1 ? raw : raw.slice(0, idx)).trim()
+      return name || "local"
+    } catch {
+      return "local"
+    }
+  }
 
   export const createApp = (opts: { cors?: string[] }): Hono => {
     const app = new Hono()
@@ -129,6 +142,7 @@ export namespace Server {
           },
         }),
       )
+      .use((c, next) => ActorContext.provide({ id: actor(c.req.header("Authorization") ?? undefined), fn: next }))
       .route("/global", GlobalRoutes())
       .put(
         "/auth/:providerID",

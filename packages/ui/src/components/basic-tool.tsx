@@ -1,4 +1,4 @@
-import { createEffect, For, Match, on, onCleanup, Show, Switch, type JSX } from "solid-js"
+import { createEffect, createMemo, For, Match, on, onCleanup, Show, Switch, type JSX } from "solid-js"
 import { animate, type AnimationPlaybackControls } from "motion"
 import { useI18n } from "../context/i18n"
 import { createStore } from "solid-js/store"
@@ -233,8 +233,17 @@ export function GenericTool(props: {
   status?: string
   hideDetails?: boolean
   input?: Record<string, unknown>
+  output?: unknown
 }) {
   const i18n = useI18n()
+  const detail = createMemo(() => {
+    const blocks = [
+      props.input !== undefined ? `Input\n${format(props.input)}` : undefined,
+      props.output !== undefined ? `Output\n${format(props.output)}` : undefined,
+    ].filter(Boolean)
+    if (!blocks.length) return
+    return blocks.join("\n\n")
+  })
 
   return (
     <BasicTool
@@ -246,6 +255,21 @@ export function GenericTool(props: {
         args: args(props.input),
       }}
       hideDetails={props.hideDetails}
-    />
+    >
+      <Show when={detail()}>
+        {(value) => (
+          <div class="px-1 pb-1 pt-2">
+            <pre class="overflow-x-auto rounded-lg border border-border-weak-base bg-surface-raised-base px-3 py-2 text-12-regular text-text-base whitespace-pre-wrap break-words">
+              {value()}
+            </pre>
+          </div>
+        )}
+      </Show>
+    </BasicTool>
   )
+}
+
+function format(value: unknown) {
+  if (typeof value === "string") return value
+  return JSON.stringify(value, null, 2) ?? String(value)
 }

@@ -66,8 +66,9 @@ import { DialogEditProject } from "@/components/dialog-edit-project"
 import { DialogAddProject } from "@/components/dialog-add-project"
 import { DebugBar } from "@/components/debug-bar"
 import { Titlebar } from "@/components/titlebar"
-import { useServer } from "@/context/server"
+import { type StoredProject, useServer } from "@/context/server"
 import { useLanguage, type Locale } from "@/context/language"
+import { getWorkspaceState, putWorkspaceState } from "@/utils/workspace-state"
 import {
   displayName,
   effectiveWorkspaceOrder,
@@ -151,6 +152,137 @@ export default function Layout(props: ParentProps) {
     sizing: false,
     peek: undefined as string | undefined,
     peeked: false,
+  })
+
+  const [remote, setRemote] = createStore({
+    key: "",
+    ready: false,
+    last: "",
+  })
+
+  let save: ReturnType<typeof setTimeout> | undefined
+
+  const page = () => ({
+    activeProject: store.activeProject,
+    activeWorkspace: store.activeWorkspace,
+    favorites: server.projects.favorites(),
+    workspaceOrder: store.workspaceOrder,
+    workspaceName: store.workspaceName,
+    workspaceBranchName: store.workspaceBranchName,
+    workspaceExpanded: store.workspaceExpanded,
+  })
+
+  const opened = () =>
+    server.projects.list().map((item): StoredProject => ({
+      worktree: item.worktree,
+      expanded: item.expanded,
+      ...(item.name ? { name: item.name } : {}),
+    }))
+
+  const workspaceState = () => ({
+    projects: opened(),
+    lastProject: server.projects.last(),
+    page: page(),
+  })
+
+  const encodedWorkspaceState = createMemo(() => JSON.stringify(workspaceState()))
+
+  function empty() {
+    return {
+      activeProject: undefined,
+      activeWorkspace: undefined,
+      favorites: [],
+      workspaceOrder: {},
+      workspaceName: {},
+      workspaceBranchName: {},
+      workspaceExpanded: {},
+    }
+  }
+
+  function hasState(raw = workspaceState()) {
+    if (raw.projects.length) return true
+    if (raw.lastProject) return true
+    if (raw.page.activeProject || raw.page.activeWorkspace) return true
+    if (raw.page.favorites.length) return true
+    if (Object.keys(raw.page.workspaceOrder).length) return true
+    if (Object.keys(raw.page.workspaceName).length) return true
+    if (Object.keys(raw.page.workspaceBranchName).length) return true
+    if (Object.keys(raw.page.workspaceExpanded).length) return true
+    return false
+  }
+
+  async function push(key: string, raw: string) {
+    if (key !== server.key) return
+    const cur = server.current
+    if (!cur) return
+    const next = JSON.parse(raw)
+    const saved = await putWorkspaceState(cur.http, next, platform.fetch)
+    if (key !== server.key) return
+    setRemote({ key, ready: true, last: JSON.stringify({ projects: saved.projects, lastProject: saved.lastProject, page: saved.page }) })
+  }
+
+  async function pull(key: string) {
+    const cur = server.current
+    const local = encodedWorkspaceState()
+    if (!cur) {
+      setRemote({ key, ready: true, last: local })
+      return
+    }
+
+    try {
+      const saved = await getWorkspaceState(cur.http, platform.fetch)
+      if (key !== server.key) return
+      const next = JSON.stringify({ projects: saved.projects, lastProject: saved.lastProject, page: saved.page })
+      if (!hasState({ projects: saved.projects, lastProject: saved.lastProject, page: saved.page })) {
+        setRemote({ key, ready: true, last: local })
+        if (hasState()) void push(key, local)
+        return
+      }
+
+      batch(() => {
+        server.projects.restore({ projects: saved.projects, last: saved.lastProject })
+        server.projects.restoreFavorites(saved.page.favorites)
+        setStore("activeProject", saved.page.activeProject)
+        setStore("activeWorkspace", saved.page.activeWorkspace)
+        setStore("workspaceOrder", reconcile(saved.page.workspaceOrder))
+        setStore("workspaceName", reconcile(saved.page.workspaceName))
+        setStore("workspaceBranchName", reconcile(saved.page.workspaceBranchName))
+        setStore("workspaceExpanded", reconcile(saved.page.workspaceExpanded))
+      })
+
+      setRemote({ key, ready: true, last: next })
+      await Promise.all(saved.projects.map((item) => globalSync.project.loadSessions(item.worktree)))
+    } catch {
+      if (key !== server.key) return
+      setRemote({ key, ready: true, last: local })
+    }
+  }
+
+  createEffect(
+    on(
+      () => ({ page: pageReady(), layout: layoutReady(), global: globalSync.ready, server: server.ready(), key: server.key }),
+      (value) => {
+        if (!value.page || !value.layout || !value.global || !value.server || !value.key) return
+        if (remote.ready && remote.key === value.key) return
+        setRemote({ key: value.key, ready: false, last: "" })
+        void pull(value.key)
+      },
+    ),
+  )
+
+  createEffect(() => {
+    const key = server.key
+    const raw = encodedWorkspaceState()
+    if (!remote.ready || remote.key !== key) return
+    if (raw === remote.last) return
+    if (save) clearTimeout(save)
+    save = setTimeout(() => {
+      void push(key, raw)
+    }, 250)
+  })
+
+  onCleanup(() => {
+    if (save) clearTimeout(save)
   })
 
   const editor = createInlineEditorController()
@@ -2110,19 +2242,20 @@ export default function Layout(props: ParentProps) {
                     </Tooltip>
                 </div>
 
-                <DropdownMenu modal={!sidebarHovering()}>
-                  <DropdownMenu.Trigger
-                    as={IconButton}
-                    icon="dot-grid"
-                    variant="ghost"
-                    data-action="project-menu"
-                    data-project={slug()}
-                    class="shrink-0 size-6 rounded-md data-[expanded]:bg-surface-base-active"
-                    classList={{
-                      "opacity-0 group-hover/project:opacity-100 data-[expanded]:opacity-100": !panelProps.mobile,
-                    }}
-                    aria-label={language.t("common.moreOptions")}
-                  />
+                <div class="flex items-center gap-1 shrink-0">
+                  <DropdownMenu modal={!sidebarHovering()}>
+                    <DropdownMenu.Trigger
+                      as={IconButton}
+                      icon="dot-grid"
+                      variant="ghost"
+                      data-action="project-menu"
+                      data-project={slug()}
+                      class="shrink-0 size-6 rounded-md data-[expanded]:bg-surface-base-active"
+                      classList={{
+                        "opacity-0 group-hover/project:opacity-100 data-[expanded]:opacity-100": !panelProps.mobile,
+                      }}
+                      aria-label={language.t("common.moreOptions")}
+                    />
                   <DropdownMenu.Portal>
                     <DropdownMenu.Content class="mt-1">
                       <DropdownMenu.Item
@@ -2174,7 +2307,8 @@ export default function Layout(props: ParentProps) {
                       </DropdownMenu.Item>
                     </DropdownMenu.Content>
                   </DropdownMenu.Portal>
-                </DropdownMenu>
+                  </DropdownMenu>
+                </div>
               </div>
             </div>
 

@@ -1,8 +1,10 @@
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { Dialog } from "@opencode-ai/ui/dialog"
 import { FileIcon } from "@opencode-ai/ui/file-icon"
+import { IconButton } from "@opencode-ai/ui/icon-button"
 import { List } from "@opencode-ai/ui/list"
 import type { ListRef } from "@opencode-ai/ui/list"
+import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { getDirectory, getFilename } from "@opencode-ai/util/path"
 import fuzzysort from "fuzzysort"
 import { createMemo, createResource, createSignal, onMount, type JSX } from "solid-js"
@@ -10,6 +12,7 @@ import { useGlobalSDK } from "@/context/global-sdk"
 import { useGlobalSync } from "@/context/global-sync"
 import { useLayout } from "@/context/layout"
 import { useLanguage } from "@/context/language"
+import { useServer } from "@/context/server"
 import { stripWorkspace, workspaceTitle } from "@/utils/workspace"
 
 interface DialogSelectDirectoryProps {
@@ -28,7 +31,7 @@ interface DialogSelectDirectoryProps {
 type Row = {
   absolute: string
   search: string
-  group: "recent" | "folders"
+  group: "favorites" | "recent" | "folders"
 }
 
 function cleanInput(value: string) {
@@ -259,6 +262,7 @@ export function DialogSelectDirectory(props: DialogSelectDirectoryProps) {
   const layout = useLayout()
   const dialog = useDialog()
   const language = useLanguage()
+  const server = useServer()
 
   const [filter, setFilter] = createSignal(props.defaultFilter ?? "")
   let list: ListRef | undefined
@@ -333,10 +337,24 @@ export function DialogSelectDirectory(props: DialogSelectDirectoryProps) {
       })
   })
 
+  const favoriteProjects = createMemo(() => {
+    const names = new Map(layout.projects.list().map((project) => [stripWorkspace(project.worktree), project.name || workspaceTitle(project.worktree)]))
+    return server.projects
+      .favorites()
+      .map((root) => {
+        const row = toRow(stripWorkspace(root), home(), "favorites")
+        const name = names.get(row.absolute) || workspaceTitle(row.absolute)
+        return {
+          ...row,
+          search: `${row.search}\n${name}`,
+        }
+      })
+  })
+
   const items = async (value: string) => {
     const results = await directories(value)
     const directoryRows = results.map((absolute) => toRow(absolute, home(), "folders"))
-    return uniqueRows([...recentProjects(), ...directoryRows])
+    return uniqueRows([...favoriteProjects(), ...recentProjects(), ...directoryRows])
   }
 
   function resolve(absolute: string) {
@@ -359,10 +377,16 @@ export function DialogSelectDirectory(props: DialogSelectDirectoryProps) {
         groupBy={(item) => item.group}
         sortGroupsBy={(a, b) => {
           if (a.category === b.category) return 0
+          if (a.category === "favorites") return -1
+          if (b.category === "favorites") return 1
           return a.category === "recent" ? -1 : 1
         }}
         groupHeader={(group) =>
-          group.category === "recent" ? language.t("home.recentProjects") : language.t("command.project.open")
+          group.category === "favorites"
+            ? "Favorites"
+            : group.category === "recent"
+              ? language.t("home.recentProjects")
+              : language.t("command.project.open")
         }
         ref={(r) => (list = r)}
         onFilter={(value) => {
@@ -393,6 +417,12 @@ export function DialogSelectDirectory(props: DialogSelectDirectoryProps) {
       >
         {(item) => {
           const path = displayPath(item.absolute, filter(), home())
+          const favorite = () => server.projects.isFavorite(item.absolute)
+          const toggle = (event: MouseEvent) => {
+            event.preventDefault()
+            event.stopPropagation()
+            server.projects.toggleFavorite(item.absolute)
+          }
           if (path === "~") {
             return (
               <div class="w-full flex items-center justify-between rounded-md">
@@ -403,6 +433,18 @@ export function DialogSelectDirectory(props: DialogSelectDirectoryProps) {
                     <span class="text-text-weak whitespace-nowrap">/</span>
                   </div>
                 </div>
+                <Tooltip value={favorite() ? "Remove favorite" : "Add favorite"} placement="left">
+                  <IconButton
+                    icon={favorite() ? "star-filled" : "star"}
+                    variant="ghost"
+                    class="size-6 rounded-md shrink-0"
+                    classList={{
+                      "text-icon-warning-base": favorite(),
+                    }}
+                    aria-label={favorite() ? "Remove favorite" : "Add favorite"}
+                    onClick={toggle}
+                  />
+                </Tooltip>
               </div>
             )
           }
@@ -418,6 +460,18 @@ export function DialogSelectDirectory(props: DialogSelectDirectoryProps) {
                   <span class="text-text-weak whitespace-nowrap">/</span>
                 </div>
               </div>
+              <Tooltip value={favorite() ? "Remove favorite" : "Add favorite"} placement="left">
+                <IconButton
+                  icon={favorite() ? "star-filled" : "star"}
+                  variant="ghost"
+                  class="size-6 rounded-md shrink-0"
+                  classList={{
+                    "text-icon-warning-base": favorite(),
+                  }}
+                  aria-label={favorite() ? "Remove favorite" : "Add favorite"}
+                  onClick={toggle}
+                />
+              </Tooltip>
             </div>
           )
         }}
