@@ -22,6 +22,7 @@ import z from "zod"
 import { Plugin } from "../plugin"
 import { ProviderID, type ModelID } from "../provider/schema"
 import { WebSearchTool } from "./websearch"
+import { GoogleSearchTool } from "./googlesearch"
 import { CodeSearchTool } from "./codesearch"
 import { Flag } from "@/flag/flag"
 import { Log } from "@/util/log"
@@ -115,6 +116,7 @@ export namespace ToolRegistry {
       TodoWriteTool,
       // TodoReadTool,
       WebSearchTool,
+      GoogleSearchTool,
       CodeSearchTool,
       SkillTool,
       ApplyPatchTool,
