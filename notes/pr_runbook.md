@@ -14,31 +14,58 @@ Use this when you need to turn a tested change on `feat/tailscale-local-serve` i
 - `origin/dev`: clean upstream base for PR branches
 - `rohan/<branch>`: fork branch used for pushing clean PR branches
 
+## Fork Push Targets
+
+- Local tested branch on the fork:
+  ```bash
+  git push rohan feat/tailscale-local-serve
+  ```
+- Clean PR branch on the fork:
+  ```bash
+  git push -u rohan fix/my-branch
+  ```
+
+Use `feat/tailscale-local-serve` only for the long-lived non-PR branch. Use a separate clean branch name for every PR.
+
 ## Exact Flow
 
 1. On `feat/tailscale-local-serve`, commit the focused feature or fix.
 2. Rebuild and test locally with `./scripts/rebuild-local.sh`.
-3. Fetch the latest upstream base:
+3. Run package-level verification before branching for PRs:
+   ```bash
+   cd packages/app && bun typecheck
+   cd packages/app && bun run build
+   cd packages/opencode && bun typecheck
+   ```
+4. Fetch the latest upstream base:
    ```bash
    git fetch origin dev
    ```
-4. Create a clean PR branch from `origin/dev`:
+5. Create a clean PR branch from `origin/dev`:
    ```bash
    git switch -c fix/my-branch origin/dev
    ```
-5. Cherry-pick only the commit(s) needed for the PR:
+6. Cherry-pick only the commit(s) needed for the PR:
    ```bash
    git cherry-pick <commit>
    ```
-6. If cherry-pick conflicts, resolve them in favor of the minimal PR diff.
-7. Run verification on the clean branch.
-8. Create an issue first in `anomalyco/opencode`.
-9. Push the PR branch to the fork:
+7. If cherry-pick conflicts, resolve them in favor of the minimal PR diff.
+8. Run verification on the clean branch too.
+9. Create an issue first in `anomalyco/opencode`.
+10. Push the PR branch to the fork:
    ```bash
    git push -u rohan fix/my-branch
    ```
-10. Open the PR against `dev` using the upstream PR template.
-11. Switch back to `feat/tailscale-local-serve` when done.
+11. Open the PR against `dev` using the upstream PR template.
+12. Switch back to `feat/tailscale-local-serve` when done.
+
+## Conflict Rule
+
+If a cherry-pick conflicts with a clean PR branch:
+
+- keep the focused fix
+- do not accidentally pull in unrelated local-branch work
+- if necessary, copy the minimal final version from `feat/tailscale-local-serve` by hand and continue the cherry-pick
 
 ## PR Compliance Checklist
 
@@ -77,6 +104,14 @@ cd packages/app && bun typecheck
 cd packages/app && bun run build
 cd packages/opencode && bun typecheck
 ```
+
+If the change affects the running UI or backend behavior, rerun:
+
+```bash
+./scripts/rebuild-local.sh
+```
+
+That step is part of the normal local verification loop on this machine.
 
 ## Common Gotchas
 
