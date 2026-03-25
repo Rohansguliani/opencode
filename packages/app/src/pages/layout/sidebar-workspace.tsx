@@ -243,6 +243,7 @@ const WorkspaceActions = (props: {
 import { getPinnedSessions, isSessionPinned } from "@/utils/pinned-sessions"
 
 const WorkspaceSessionList = (props: {
+  directory: string
   slug: Accessor<string>
   mobile?: boolean
   popover?: boolean
@@ -281,6 +282,7 @@ const WorkspaceSessionList = (props: {
           {(session) => (
             <SessionItem
               session={session}
+              directory={props.directory}
               list={props.sessions()}
               navList={props.ctx.navList}
               slug={props.slug()}
@@ -310,6 +312,7 @@ const WorkspaceSessionList = (props: {
         {(session) => (
           <SessionItem
             session={session}
+            directory={props.directory}
             list={props.sessions()}
             navList={props.ctx.navList}
             slug={props.slug()}
@@ -499,6 +502,7 @@ export const SortableWorkspace = (props: {
 
         <Collapsible.Content>
           <WorkspaceSessionList
+            directory={props.directory}
             slug={slug}
             mobile={props.mobile}
             popover={props.popover}
@@ -551,6 +555,7 @@ export const LocalWorkspace = (props: {
       class="size-full flex flex-col py-2 overflow-y-auto no-scrollbar [overflow-anchor:none]"
     >
       <WorkspaceSessionList
+        directory={props.project.worktree}
         slug={slug}
         mobile={props.mobile}
         popover={props.popover}
