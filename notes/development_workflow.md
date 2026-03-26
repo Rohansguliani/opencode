@@ -4,20 +4,29 @@
 
 When working on this machine, the practical agent loop should be:
 
-1. Reproduce the issue and read the relevant code before changing anything.
-2. Make the smallest useful code change on `feat/tailscale-local-serve`.
-3. Run package-level verification for the packages you touched:
+1. Before writing code for a feature, make sure the feature idea is documented in `notes/feats/<current-feature>/`.
+2. As implementation evolves, keep adding development notes, decisions, and behavior updates in that same feature notes folder.
+3. Reproduce the issue and read the relevant code before changing anything.
+4. Make the smallest useful code change on `feat/tailscale-local-serve`.
+5. Run package-level verification for the packages you touched:
    ```bash
    cd packages/app && bun typecheck
    cd packages/app && bun run build
    cd packages/opencode && bun typecheck
    ```
-4. If the change affects the running app or backend behavior, rebuild/restart with:
+6. If the change affects the running app or backend behavior, rebuild/restart with:
    ```bash
    ./scripts/rebuild-local.sh
    ```
-5. Verify the behavior in the local/Tailscale app.
-6. Only after the fix is confirmed, decide whether it stays only on `feat/tailscale-local-serve` or also needs a clean PR branch.
+7. Verify the behavior in the local/Tailscale app.
+8. Only after the fix is confirmed, decide whether it stays only on `feat/tailscale-local-serve` or also needs a clean PR branch.
+
+## Feature Notes Rule
+
+- Every active feature should have a living notes folder at `notes/feats/<current-feature>/`.
+- Document the feature idea before implementation starts.
+- Keep that folder updated during development with implementation notes, fixes, behavior changes, and decisions.
+- Treat feature notes as the first place another agent should look to understand the intent and current shape of the work.
 
 ## What To Verify By Default
 
