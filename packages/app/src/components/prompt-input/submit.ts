@@ -1,4 +1,4 @@
-import type { Message, Session } from "@opencode-ai/sdk/v2/client"
+import type { Message, Part, Session } from "@opencode-ai/sdk/v2/client"
 import { showToast } from "@opencode-ai/ui/toast"
 import { base64Encode } from "@opencode-ai/util/encode"
 import { Binary } from "@opencode-ai/util/binary"
@@ -6,6 +6,7 @@ import { useNavigate, useParams } from "@solidjs/router"
 import { useSessionParams } from "@/hooks/use-session-params"
 import type { Accessor } from "solid-js"
 import type { FileSelection } from "@/context/file"
+import type { ServerConnection } from "@/context/server"
 import { useGlobalSync } from "@/context/global-sync"
 import { useLanguage } from "@/context/language"
 import { useLayout } from "@/context/layout"
@@ -20,6 +21,7 @@ import { Worktree as WorktreeState } from "@/utils/worktree"
 import { buildRequestParts } from "./build-request-parts"
 import { setCursorPosition } from "./editor-dom"
 import { formatServerError } from "@/utils/server-errors"
+import { promptOracle } from "@/utils/oracle"
 
 type PendingPrompt = {
   abort: AbortController
@@ -167,6 +169,100 @@ export async function sendFollowupDraft(input: FollowupSendInput) {
   }
 }
 
+async function sendFrozenDraft(input: {
+  server: ServerConnection.HttpBase
+  fetch?: typeof window.fetch
+  globalSync: ReturnType<typeof useGlobalSync>
+  sync: ReturnType<typeof useSync>
+  draft: FollowupDraft
+  messageID: string
+}) {
+  const text = draftText(input.draft.prompt)
+  const images = draftImages(input.draft.prompt)
+  const [, setStore] = input.globalSync.child(input.draft.sessionDirectory)
+  const { requestParts, optimisticParts } = buildRequestParts({
+    prompt: input.draft.prompt,
+    context: input.draft.context,
+    images,
+    text,
+    sessionID: input.draft.sessionID,
+    messageID: input.messageID,
+    sessionDirectory: input.draft.sessionDirectory,
+  })
+
+  const user: Message = {
+    id: input.messageID,
+    sessionID: input.draft.sessionID,
+    role: "user",
+    time: { created: Date.now() },
+    agent: input.draft.agent,
+    model: input.draft.model,
+    variant: input.draft.variant,
+  }
+
+  const mark: Part = {
+    id: Identifier.ascending("part"),
+    sessionID: input.draft.sessionID,
+    messageID: input.messageID,
+    type: "text",
+    text: "[Frozen context turn]",
+    synthetic: true,
+    ignored: true,
+    metadata: { frozen: true },
+  }
+
+  const note: Part = {
+    id: Identifier.ascending("part"),
+    sessionID: input.draft.sessionID,
+    messageID: "",
+    type: "text",
+    text: "",
+    synthetic: true,
+    ignored: true,
+    metadata: { frozen: true },
+  }
+
+  setStore("session_status", input.draft.sessionID, { type: "busy" })
+  input.sync.session.frozen.add({
+    directory: input.draft.sessionDirectory,
+    sessionID: input.draft.sessionID,
+    message: user,
+    parts: [...optimisticParts, mark],
+  })
+
+  try {
+    const msg = await promptOracle({
+      server: input.server,
+      fetch: input.fetch,
+      body: {
+        sessionID: input.draft.sessionID,
+        messageID: input.messageID,
+        parts: requestParts,
+        frozen: true,
+        agent: input.draft.agent,
+        model: input.draft.model,
+        variant: input.draft.variant,
+      },
+    })
+    input.sync.session.frozen.add({
+      directory: input.draft.sessionDirectory,
+      sessionID: input.draft.sessionID,
+      message: msg.info,
+      parts: [...msg.parts, { ...note, messageID: msg.info.id }],
+    })
+    setStore("session_status", input.draft.sessionID, { type: "idle" })
+    return
+  } catch (err) {
+    setStore("session_status", input.draft.sessionID, { type: "idle" })
+    input.sync.session.frozen.remove({
+      directory: input.draft.sessionDirectory,
+      sessionID: input.draft.sessionID,
+      messageID: input.messageID,
+    })
+    throw err
+  }
+}
+
 type PromptSubmitInput = {
   info: Accessor<{ id: string } | undefined>
   imageAttachments: Accessor<ImageAttachmentPart[]>
@@ -184,6 +280,9 @@ type PromptSubmitInput = {
   newSessionWorktree?: Accessor<string | undefined>
   onNewSessionWorktreeReset?: () => void
   shouldQueue?: Accessor<boolean>
+  frozen?: Accessor<boolean>
+  oracleServer?: ServerConnection.HttpBase
+  oracleFetch?: typeof window.fetch
   onQueue?: (draft: FollowupDraft) => void
   onAbort?: () => void
   onSubmit?: () => void
@@ -501,6 +600,37 @@ export function createPromptSubmit(input: PromptSubmitInput) {
 
     const commentItems = context.filter((item) => item.type === "file" && !!item.comment?.trim())
     const messageID = Identifier.ascending("message")
+
+    if (input.frozen?.()) {
+      if (!input.oracleServer) {
+        showToast({
+          title: language.t("prompt.toast.promptSendFailed.title"),
+          description: "Frozen context is unavailable for the current server.",
+        })
+        return
+      }
+
+      removeCommentItems(commentItems)
+      clearInput()
+      input.onSubmit?.()
+
+      void sendFrozenDraft({
+        server: input.oracleServer,
+        fetch: input.oracleFetch,
+        globalSync,
+        sync,
+        draft,
+        messageID,
+      }).catch((err) => {
+        showToast({
+          title: language.t("prompt.toast.promptSendFailed.title"),
+          description: errorMessage(err),
+        })
+        restoreCommentItems(commentItems)
+        restoreInput()
+      })
+      return
+    }
 
     const removeOptimisticMessage = () => {
       sync.session.optimistic.remove({

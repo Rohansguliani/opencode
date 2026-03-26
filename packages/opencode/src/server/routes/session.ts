@@ -779,6 +779,42 @@ export const SessionRoutes = lazy(() =>
       },
     )
     .post(
+      "/:sessionID/oracle",
+      describeRoute({
+        summary: "Send frozen-context message",
+        description: "Query the current session context without persisting the new user/assistant turn.",
+        operationId: "session.oracle",
+        responses: {
+          200: {
+            description: "Ephemeral assistant message",
+            content: {
+              "application/json": {
+                schema: resolver(
+                  z.object({
+                    info: MessageV2.Assistant,
+                    parts: MessageV2.Part.array(),
+                  }),
+                ),
+              },
+            },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator(
+        "param",
+        z.object({
+          sessionID: SessionID.zod,
+        }),
+      ),
+      validator("json", SessionPrompt.PromptInput.omit({ sessionID: true }).extend({ ephemeral: z.boolean().optional() })),
+      async (c) => {
+        const sessionID = c.req.valid("param").sessionID
+        const body = c.req.valid("json")
+        return c.json(await SessionPrompt.prompt({ ...body, sessionID, ephemeral: true }))
+      },
+    )
+    .post(
       "/:sessionID/message",
       describeRoute({
         summary: "Send message",

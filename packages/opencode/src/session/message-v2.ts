@@ -559,10 +559,11 @@ export namespace MessageV2 {
   export function toModelMessages(
     input: WithParts[],
     model: Provider.Model,
-    options?: { stripMedia?: boolean },
+    options?: { stripMedia?: boolean; includeFrozen?: string },
   ): ModelMessage[] {
     const result: UIMessage[] = []
     const toolNames = new Set<string>()
+    const frozen = new Set<string>()
     // Track media from tool results that need to be injected as user messages
     // for providers that don't support media in tool results.
     //
@@ -621,6 +622,14 @@ export namespace MessageV2 {
       if (msg.parts.length === 0) continue
 
       if (msg.info.role === "user") {
+        if (
+          msg.info.id !== options?.includeFrozen &&
+          msg.parts.some((part) => part.type === "text" && part.metadata?.frozen === true)
+        ) {
+          frozen.add(msg.info.id)
+          continue
+        }
+
         const userMessage: UIMessage = {
           id: msg.info.id,
           role: "user",
@@ -666,6 +675,8 @@ export namespace MessageV2 {
       }
 
       if (msg.info.role === "assistant") {
+        if (msg.info.parentID !== options?.includeFrozen && frozen.has(msg.info.parentID)) continue
+
         const differentModel = `${model.providerID}/${model.id}` !== `${msg.info.providerID}/${msg.info.modelID}`
         const media: Array<{ mime: string; url: string }> = []
 

@@ -111,6 +111,8 @@ export namespace SessionPrompt {
     format: MessageV2.Format.optional(),
     system: z.string().optional(),
     variant: z.string().optional(),
+    ephemeral: z.boolean().optional(),
+    frozen: z.boolean().optional(),
     parts: z.array(
       z.discriminatedUnion("type", [
         MessageV2.TextPart.omit({
@@ -159,6 +161,8 @@ export namespace SessionPrompt {
   export type PromptInput = z.infer<typeof PromptInput>
 
   export const prompt = fn(PromptInput, async (input) => {
+    if (input.ephemeral) return oracle(input)
+
     const session = await Session.get(input.sessionID)
     await SessionRevert.cleanup(session)
 
@@ -185,6 +189,163 @@ export namespace SessionPrompt {
     }
 
     return loop({ sessionID: input.sessionID })
+  })
+
+  const readonly = new Set(["read", "glob", "grep", "webfetch", "websearch", "googlesearch", "codesearch", "lsp"])
+
+  const oracle = fn(PromptInput, async (input) => {
+    const session = await Session.get(input.sessionID)
+    SessionPrompt.assertNotBusy(input.sessionID)
+    const abort = start(input.sessionID)
+    if (!abort) throw new Error("Impossible")
+    using _ = defer(() => cancel(input.sessionID))
+
+    try {
+      let msgs = await MessageV2.filterCompacted(MessageV2.stream(input.sessionID))
+      const user = await createUserMessage(input, { persist: false })
+      msgs = [...msgs, user]
+
+      let cost = 0
+      let tokens = {
+        input: 0,
+        output: 0,
+        reasoning: 0,
+        cache: { read: 0, write: 0 },
+      }
+      let structured: unknown | undefined
+      const parts = [] as MessageV2.Part[]
+      const ui: MessageV2.Assistant = {
+        id: MessageID.ascending(),
+        parentID: user.info.id,
+        role: "assistant",
+        mode: user.info.agent,
+        agent: user.info.agent,
+        variant: user.info.variant,
+        path: {
+          cwd: Instance.directory,
+          root: Instance.worktree,
+        },
+        cost: 0,
+        tokens,
+        modelID: user.info.model.modelID,
+        providerID: user.info.model.providerID,
+        time: { created: Date.now() },
+        sessionID: input.sessionID,
+      }
+
+      while (true) {
+        const last = msgs.findLast((msg) => msg.info.role === "user")?.info
+        if (!last || last.role !== "user") throw new Error("No user message found in stream. This should never happen.")
+
+        const agent = await Agent.get(last.agent)
+        const model = await Provider.getModel(last.model.providerID, last.model.modelID)
+        msgs = await insertReminders({ messages: msgs, agent, session, persist: false })
+
+        const fake = {
+          message: {
+            ...ui,
+            id: MessageID.ascending(),
+            parentID: last.id,
+            modelID: model.id,
+            providerID: model.providerID,
+            time: { created: Date.now() },
+            error: undefined,
+            finish: undefined,
+            structured: undefined,
+            cost: 0,
+            tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+          } satisfies MessageV2.Assistant,
+          partFromToolCall() {
+            return undefined
+          },
+        }
+
+        const lastUserMsg = msgs.findLast((m) => m.info.role === "user")
+        const bypassAgentCheck = lastUserMsg?.parts.some((p) => p.type === "agent") ?? false
+        const tools = Object.fromEntries(
+          Object.entries(
+            await resolveTools({
+              agent,
+              session,
+              model,
+              tools: last.tools,
+              processor: fake as unknown as SessionProcessor.Info,
+              bypassAgentCheck,
+              messages: msgs,
+            }),
+          ).filter(([id]) => readonly.has(id)),
+        )
+
+        if (last.format?.type === "json_schema") {
+          tools.StructuredOutput = createStructuredOutputTool({
+            schema: last.format.schema,
+            onSuccess(output) {
+              structured = output
+            },
+          })
+        }
+
+        await Plugin.trigger("experimental.chat.messages.transform", {}, { messages: msgs })
+
+        const skills = await SystemPrompt.skills(agent)
+        const system = [
+          ...(await SystemPrompt.environment(model)),
+          ...(skills ? [skills] : []),
+          ...(await InstructionPrompt.system()),
+          "<system-reminder>Freeze Context is active. Treat this as a scratchpad query. Do not make any persistent changes and do not rely on mutating tools. Use only the provided read-only tools when needed.</system-reminder>",
+        ]
+        if (last.format?.type === "json_schema") system.push(STRUCTURED_OUTPUT_SYSTEM_PROMPT)
+
+        const step = await oracleStep({
+          assistant: fake.message,
+          model,
+          tools,
+          user: last,
+          sessionID: input.sessionID,
+          abort,
+          system,
+          messages: [
+            ...MessageV2.toModelMessages(msgs, model, { includeFrozen: last.id }),
+          ],
+          toolChoice: last.format?.type === "json_schema" ? "required" : undefined,
+        })
+
+        cost += step.info.cost
+        tokens = {
+          input: tokens.input + step.info.tokens.input,
+          output: tokens.output + step.info.tokens.output,
+          reasoning: tokens.reasoning + step.info.tokens.reasoning,
+          cache: {
+            read: tokens.cache.read + step.info.tokens.cache.read,
+            write: tokens.cache.write + step.info.tokens.cache.write,
+          },
+        }
+        parts.push(...step.parts.map((part) => ({ ...part, messageID: ui.id })))
+        msgs = [...msgs, { info: step.info, parts: step.parts }]
+
+        if (structured !== undefined) {
+          ui.structured = structured
+          ui.finish = step.info.finish ?? "stop"
+          break
+        }
+        if (step.info.error) {
+          ui.error = step.info.error
+          ui.finish = step.info.finish
+          break
+        }
+        if (step.info.finish && !["tool-calls", "unknown"].includes(step.info.finish)) {
+          ui.finish = step.info.finish
+          break
+        }
+      }
+
+      ui.cost = cost
+      ui.tokens = tokens
+      ui.time.completed = Date.now()
+      return { info: ui, parts }
+    } finally {
+      SessionStatus.set(input.sessionID, { type: "idle" })
+    }
   })
 
   export async function resolvePromptParts(template: string): Promise<PromptInput["parts"]> {
@@ -670,7 +831,7 @@ export namespace SessionPrompt {
         sessionID,
         system,
         messages: [
-          ...MessageV2.toModelMessages(msgs, model),
+          ...MessageV2.toModelMessages(msgs, model, { includeFrozen: lastUser.id }),
           ...(isLastStep
             ? [
                 {
@@ -961,7 +1122,192 @@ export namespace SessionPrompt {
     })
   }
 
-  async function createUserMessage(input: PromptInput) {
+  async function oracleStep(input: {
+    assistant: MessageV2.Assistant
+    sessionID: SessionID
+    user: MessageV2.User
+    model: Provider.Model
+    abort: AbortSignal
+    system: string[]
+    messages: Awaited<ReturnType<typeof MessageV2.toModelMessages>>
+    tools: Record<string, AITool>
+    toolChoice?: "required"
+  }) {
+    const parts = [] as MessageV2.Part[]
+    const calls = {} as Record<string, MessageV2.ToolPart>
+    const reasoning = {} as Record<string, MessageV2.ReasoningPart>
+    let text: MessageV2.TextPart | undefined
+
+    try {
+      const stream = await LLM.stream({
+        user: input.user,
+        agent: await Agent.get(input.user.agent),
+        abort: input.abort,
+        sessionID: input.sessionID,
+        system: input.system,
+        messages: input.messages,
+        tools: input.tools,
+        model: input.model,
+        toolChoice: input.toolChoice,
+      })
+
+      for await (const value of stream.fullStream) {
+        input.abort.throwIfAborted()
+        switch (value.type) {
+          case "start":
+            SessionStatus.set(input.sessionID, { type: "busy" })
+            break
+          case "reasoning-start": {
+            const part = {
+              id: PartID.ascending(),
+              messageID: input.assistant.id,
+              sessionID: input.sessionID,
+              type: "reasoning" as const,
+              text: "",
+              time: { start: Date.now() },
+              metadata: value.providerMetadata,
+            }
+            reasoning[value.id] = part
+            parts.push(part)
+            break
+          }
+          case "reasoning-delta": {
+            const part = reasoning[value.id]
+            if (!part) break
+            part.text += value.text
+            if (value.providerMetadata) part.metadata = value.providerMetadata
+            break
+          }
+          case "reasoning-end": {
+            const part = reasoning[value.id]
+            if (!part) break
+            part.text = part.text.trimEnd()
+            part.time = { ...part.time, end: Date.now() }
+            if (value.providerMetadata) part.metadata = value.providerMetadata
+            delete reasoning[value.id]
+            break
+          }
+          case "tool-input-start": {
+            const part = {
+              id: PartID.ascending(),
+              messageID: input.assistant.id,
+              sessionID: input.sessionID,
+              type: "tool" as const,
+              tool: value.toolName,
+              callID: value.id,
+              state: {
+                status: "pending" as const,
+                input: {},
+                raw: "",
+              },
+            }
+            calls[value.id] = part
+            parts.push(part)
+            break
+          }
+          case "tool-call": {
+            const part = calls[value.toolCallId]
+            if (!part) break
+            part.tool = value.toolName
+            part.metadata = value.providerMetadata
+            part.state = {
+              status: "running",
+              input: value.input,
+              time: { start: Date.now() },
+            }
+            break
+          }
+          case "tool-result": {
+            const part = calls[value.toolCallId]
+            if (!part || part.state.status !== "running") break
+            part.state = {
+              status: "completed",
+              input: value.input ?? part.state.input,
+              output: value.output.output,
+              metadata: value.output.metadata,
+              title: value.output.title,
+              time: { start: part.state.time.start, end: Date.now() },
+              attachments: value.output.attachments,
+            }
+            break
+          }
+          case "tool-error": {
+            const part = calls[value.toolCallId]
+            if (!part || part.state.status !== "running") break
+            part.state = {
+              status: "error",
+              input: value.input ?? part.state.input,
+              error: `${value.error}`,
+              time: { start: part.state.time.start, end: Date.now() },
+            }
+            break
+          }
+          case "text-start": {
+            text = {
+              id: PartID.ascending(),
+              messageID: input.assistant.id,
+              sessionID: input.sessionID,
+              type: "text",
+              text: "",
+              time: { start: Date.now() },
+              metadata: value.providerMetadata,
+            }
+            parts.push(text)
+            break
+          }
+          case "text-delta": {
+            if (!text) break
+            text.text += value.text
+            if (value.providerMetadata) text.metadata = value.providerMetadata
+            break
+          }
+          case "text-end": {
+            if (!text) break
+            text.text = text.text.trimEnd()
+            text.time = { start: text.time?.start ?? Date.now(), end: Date.now() }
+            if (value.providerMetadata) text.metadata = value.providerMetadata
+            text = undefined
+            break
+          }
+          case "finish-step": {
+            const usage = Session.getUsage({
+              model: input.model,
+              usage: value.usage,
+              metadata: value.providerMetadata,
+            })
+            input.assistant.finish = value.finishReason
+            input.assistant.cost += usage.cost
+            input.assistant.tokens = usage.tokens
+            break
+          }
+          case "error":
+            throw value.error
+          default:
+            break
+        }
+      }
+    } catch (err) {
+      input.assistant.error = MessageV2.fromError(err, { providerID: input.model.providerID })
+    }
+
+    for (const part of Object.values(calls)) {
+      if (part.state.status === "pending" || part.state.status === "running") {
+        part.state = {
+          status: "error",
+          input: part.state.input,
+          error: "Tool execution aborted",
+          time: {
+            start: part.state.status === "running" ? part.state.time.start : Date.now(),
+            end: Date.now(),
+          },
+        }
+      }
+    }
+    input.assistant.time.completed = Date.now()
+    return { info: input.assistant, parts }
+  }
+
+  async function createUserMessage(input: PromptInput, opts?: { persist?: boolean }) {
     const agent = await Agent.get(input.agent ?? (await Agent.defaultAgent()))
 
     const model = input.model ?? agent.model ?? (await lastModel(input.sessionID))
@@ -1302,6 +1648,20 @@ export namespace SessionPrompt {
       }),
     ).then((x) => x.flat().map(assign))
 
+    if (input.frozen) {
+      parts.push(
+        assign({
+          messageID: info.id,
+          sessionID: input.sessionID,
+          type: "text",
+          text: "[Frozen context turn]",
+          synthetic: true,
+          ignored: true,
+          metadata: { frozen: true },
+        }),
+      )
+    }
+
     await Plugin.trigger(
       "chat.message",
       {
@@ -1317,9 +1677,11 @@ export namespace SessionPrompt {
       },
     )
 
-    await Session.updateMessage(info)
-    for (const part of parts) {
-      await Session.updatePart(part)
+    if (opts?.persist !== false) {
+      await Session.updateMessage(info)
+      for (const part of parts) {
+        await Session.updatePart(part)
+      }
     }
 
     return {
@@ -1328,15 +1690,30 @@ export namespace SessionPrompt {
     }
   }
 
-  async function insertReminders(input: { messages: MessageV2.WithParts[]; agent: Agent.Info; session: Session.Info }) {
+  async function insertReminders(input: {
+    messages: MessageV2.WithParts[]
+    agent: Agent.Info
+    session: Session.Info
+    persist?: boolean
+  }) {
     const userMessage = input.messages.findLast((msg) => msg.info.role === "user")
     if (!userMessage) return input.messages
+
+    const add = async (part: Omit<MessageV2.TextPart, "id">) => {
+      if (input.persist === false) {
+        const next = { ...part, id: PartID.ascending() }
+        userMessage.parts.push(next)
+        return next
+      }
+      const next = await Session.updatePart({ id: PartID.ascending(), ...part })
+      userMessage.parts.push(next)
+      return next
+    }
 
     // Original logic when experimental plan mode is disabled
     if (!Flag.OPENCODE_EXPERIMENTAL_PLAN_MODE) {
       if (input.agent.name === "plan") {
-        userMessage.parts.push({
-          id: PartID.ascending(),
+        await add({
           messageID: userMessage.info.id,
           sessionID: userMessage.info.sessionID,
           type: "text",
@@ -1346,8 +1723,7 @@ export namespace SessionPrompt {
       }
       const wasPlan = input.messages.some((msg) => msg.info.role === "assistant" && msg.info.agent === "plan")
       if (wasPlan && input.agent.name === "build") {
-        userMessage.parts.push({
-          id: PartID.ascending(),
+        await add({
           messageID: userMessage.info.id,
           sessionID: userMessage.info.sessionID,
           type: "text",
@@ -1366,8 +1742,7 @@ export namespace SessionPrompt {
       const plan = Session.plan(input.session)
       const exists = await Filesystem.exists(plan)
       if (exists) {
-        const part = await Session.updatePart({
-          id: PartID.ascending(),
+        await add({
           messageID: userMessage.info.id,
           sessionID: userMessage.info.sessionID,
           type: "text",
@@ -1375,7 +1750,6 @@ export namespace SessionPrompt {
             BUILD_SWITCH + "\n\n" + `A plan file exists at ${plan}. You should execute on the plan defined within it`,
           synthetic: true,
         })
-        userMessage.parts.push(part)
       }
       return input.messages
     }
@@ -1385,8 +1759,7 @@ export namespace SessionPrompt {
       const plan = Session.plan(input.session)
       const exists = await Filesystem.exists(plan)
       if (!exists) await fs.mkdir(path.dirname(plan), { recursive: true })
-      const part = await Session.updatePart({
-        id: PartID.ascending(),
+      await add({
         messageID: userMessage.info.id,
         sessionID: userMessage.info.sessionID,
         type: "text",
@@ -1462,7 +1835,6 @@ NOTE: At any point in time through this workflow you should feel free to ask the
 </system-reminder>`,
         synthetic: true,
       })
-      userMessage.parts.push(part)
       return input.messages
     }
     return input.messages

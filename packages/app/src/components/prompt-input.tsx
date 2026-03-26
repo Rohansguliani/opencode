@@ -32,6 +32,7 @@ import { ModelSelectorPopover } from "@/components/dialog-select-model"
 import { DialogSelectModelUnpaid } from "@/components/dialog-select-model-unpaid"
 import { useProviders } from "@/hooks/use-providers"
 import { useCommand } from "@/context/command"
+import { useServer } from "@/context/server"
 import { Persist, persisted } from "@/utils/persist"
 import { usePermission } from "@/context/permission"
 import { useLanguage } from "@/context/language"
@@ -105,6 +106,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   const routerParams = useParams<{ dir?: string; id?: string }>()
   const sessionParams = useSessionParams()
   const sdk = useSDK()
+  const server = useServer()
   const sync = useSync()
   const local = useLocal()
   const files = useFile()
@@ -323,6 +325,26 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
       entries: [],
     }),
   )
+
+  const [freeze, setFreeze] = persisted(
+    Persist.global("prompt-freeze", ["prompt-freeze.v1"]),
+    createStore({
+      session: {} as Record<string, boolean>,
+    }),
+  )
+
+  const frozen = createMemo(() => {
+    const id = params.id
+    if (!id) return false
+    return freeze.session[id] ?? false
+  })
+
+  const setFrozen = (value: boolean) => {
+    const id = params.id
+    if (!id) return
+    setFreeze("session", id, value)
+  }
+
   const [shellHistory, setShellHistory] = persisted(
     Persist.global("prompt-history-shell", ["prompt-history-shell.v1"]),
     createStore<{
@@ -1079,6 +1101,9 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     newSessionWorktree: () => props.newSessionWorktree,
     onNewSessionWorktreeReset: props.onNewSessionWorktreeReset,
     shouldQueue: props.shouldQueue,
+    frozen,
+    oracleServer: server.current?.http,
+    oracleFetch: platform.fetch,
     onQueue: props.onQueue,
     onAbort: props.onAbort,
     onSubmit: props.onSubmit,
@@ -1554,6 +1579,28 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                     />
                   </TooltipKeybind>
                 </div>
+                <Tooltip placement="top" gutter={8} value={frozen() ? "Unfreeze context" : "Freeze context"}>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => {
+                      if (!params.id) return
+                      const next = !frozen()
+                      setFrozen(next)
+                    }}
+                    disabled={!params.id}
+                    classList={{
+                      "h-7 w-7 p-0 shrink-0 flex items-center justify-center": true,
+                      "text-text-base": !frozen(),
+                      "bg-surface-info-base text-icon-info-active": frozen(),
+                    }}
+                    style={control()}
+                    aria-label={frozen() ? "Unfreeze context" : "Freeze context"}
+                    aria-pressed={frozen()}
+                  >
+                    <Icon name="snowflake" size="small" />
+                  </Button>
+                </Tooltip>
                 <TooltipKeybind
                   placement="top"
                   gutter={8}

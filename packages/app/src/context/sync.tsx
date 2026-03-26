@@ -59,6 +59,35 @@ type OptimisticItem = {
   parts: Part[]
 }
 
+const frozen = new Map<string, Map<string, OptimisticItem>>()
+
+function setFrozen(directory: string, sessionID: string, item: OptimisticItem) {
+  const key = keyFor(directory, sessionID)
+  const list = frozen.get(key)
+  if (list) {
+    list.set(item.message.id, { message: item.message, parts: sortParts(item.parts) })
+    return
+  }
+  frozen.set(key, new Map([[item.message.id, { message: item.message, parts: sortParts(item.parts) }]]))
+}
+
+function clearFrozen(directory: string, sessionID: string, messageID?: string) {
+  const key = keyFor(directory, sessionID)
+  if (!messageID) {
+    frozen.delete(key)
+    return
+  }
+
+  const list = frozen.get(key)
+  if (!list) return
+  list.delete(messageID)
+  if (list.size === 0) frozen.delete(key)
+}
+
+function getFrozen(directory: string, sessionID: string) {
+  return [...(frozen.get(keyFor(directory, sessionID))?.values() ?? [])]
+}
+
 type MessagePage = {
   session: Message[]
   part: { id: string; part: Part[] }[]
@@ -226,6 +255,17 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       ...(optimistic.get(keyFor(directory, sessionID))?.values() ?? []),
     ]
 
+    const pending = (directory: string, sessionID: string) => {
+      const next = new Map<string, OptimisticItem>()
+      for (const item of getFrozen(directory, sessionID)) {
+        next.set(item.message.id, item)
+      }
+      for (const item of getOptimistic(directory, sessionID)) {
+        next.set(item.message.id, item)
+      }
+      return [...next.values()]
+    }
+
     const seenFor = (directory: string) => {
       const existing = seen.get(directory)
       if (existing) {
@@ -326,7 +366,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       await fetchMessages(input)
         .then((page) => {
           if (!tracked(input.directory, input.sessionID)) return
-          const next = mergeOptimisticPage(page, getOptimistic(input.directory, input.sessionID))
+          const next = mergeOptimisticPage(page, pending(input.directory, input.sessionID))
           for (const messageID of next.confirmed) {
             clearOptimistic(input.directory, input.sessionID, messageID)
           }
@@ -395,6 +435,20 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
             const directory = input.directory ?? sdk.directory
             const [, setStore] = target(input.directory)
             clearOptimistic(directory, input.sessionID, input.messageID)
+            setOptimisticRemove(setStore as (...args: unknown[]) => void, input)
+          },
+        },
+        frozen: {
+          add(input: { directory?: string; sessionID: string; message: Message; parts: Part[] }) {
+            const directory = input.directory ?? sdk.directory
+            const [, setStore] = target(input.directory)
+            setFrozen(directory, input.sessionID, { message: input.message, parts: input.parts })
+            setOptimisticAdd(setStore as (...args: unknown[]) => void, input)
+          },
+          remove(input: { directory?: string; sessionID: string; messageID: string }) {
+            const directory = input.directory ?? sdk.directory
+            const [, setStore] = target(input.directory)
+            clearFrozen(directory, input.sessionID, input.messageID)
             setOptimisticRemove(setStore as (...args: unknown[]) => void, input)
           },
         },

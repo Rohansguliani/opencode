@@ -10,12 +10,15 @@ const optimistic: Array<{
   directory?: string
   sessionID?: string
   message: {
+    role: string
     agent: string
     model: { providerID: string; modelID: string }
     variant?: string
   }
 }> = []
 const optimisticSeeded: boolean[] = []
+const oracle: Array<{ url: string; body: Record<string, unknown> }> = []
+const promptAsync: string[] = []
 const storedSessions: Record<string, Array<{ id: string; title?: string }>> = {}
 const promoted: Array<{ directory: string; sessionID: string }> = []
 const sentShell: string[] = []
@@ -45,7 +48,10 @@ const clientFor = (directory: string) => {
         return { data: undefined }
       },
       prompt: async () => ({ data: undefined }),
-      promptAsync: async () => ({ data: undefined }),
+      promptAsync: async () => {
+        promptAsync.push(directory)
+        return { data: undefined }
+      },
       command: async () => ({ data: undefined }),
       abort: async () => ({ data: undefined }),
     },
@@ -118,6 +124,10 @@ beforeAll(async () => {
 
   mock.module("@/context/layout", () => ({
     useLayout: () => ({
+      sidebar: {
+        gridMode: () => false,
+        niriMode: () => false,
+      },
       handoff: {
         setTabs: () => undefined,
       },
@@ -146,7 +156,32 @@ beforeAll(async () => {
           add: (value: {
             directory?: string
             sessionID?: string
-            message: { agent: string; model: { providerID: string; modelID: string }; variant?: string }
+            message: {
+              role: string
+              agent: string
+              model: { providerID: string; modelID: string }
+              variant?: string
+            }
+          }) => {
+            optimistic.push(value)
+            optimisticSeeded.push(
+              !!value.directory &&
+                !!value.sessionID &&
+                !!storedSessions[value.directory]?.find((item) => item.id === value.sessionID)?.title,
+            )
+          },
+          remove: () => undefined,
+        },
+        frozen: {
+          add: (value: {
+            directory?: string
+            sessionID?: string
+            message: {
+              role: string
+              agent: string
+              model: { providerID: string; modelID: string }
+              variant?: string
+            }
           }) => {
             optimistic.push(value)
             optimisticSeeded.push(
@@ -207,6 +242,8 @@ beforeEach(() => {
   enabledAutoAccept.length = 0
   optimistic.length = 0
   optimisticSeeded.length = 0
+  oracle.length = 0
+  promptAsync.length = 0
   promoted.length = 0
   params = {}
   sentShell.length = 0
@@ -342,5 +379,69 @@ describe("prompt submit worktree selection", () => {
 
     expect(storedSessions["/repo/worktree-a"]).toEqual([{ id: "session-1", title: "New session 1" }])
     expect(optimisticSeeded).toEqual([true])
+  })
+
+  test("frozen prompts use oracle and add a transient reply", async () => {
+    params = { id: "session-1" }
+
+    const use = (async (url: URL | RequestInfo, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as Record<string, unknown>
+      oracle.push({ url: String(url), body })
+      return new Response(
+        JSON.stringify({
+          info: {
+            id: "msg_oracle",
+            sessionID: "session-1",
+            parentID: body.messageID,
+            role: "assistant",
+            agent: "agent",
+            model: { providerID: "provider", modelID: "model" },
+            time: { created: 1 },
+          },
+          parts: [
+            {
+              id: "part_oracle",
+              sessionID: "session-1",
+              messageID: "msg_oracle",
+              type: "text",
+              text: "oracle",
+            },
+          ],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      )
+    }) as typeof fetch
+
+    const submit = createPromptSubmit({
+      info: () => ({ id: "session-1" }),
+      imageAttachments: () => [],
+      commentCount: () => 0,
+      autoAccept: () => false,
+      mode: () => "normal",
+      working: () => false,
+      editor: () => undefined,
+      queueScroll: () => undefined,
+      promptLength: (value) => value.reduce((sum, part) => sum + ("content" in part ? part.content.length : 0), 0),
+      addToHistory: () => undefined,
+      resetHistoryNavigation: () => undefined,
+      setMode: () => undefined,
+      setPopover: () => undefined,
+      frozen: () => true,
+      oracleServer: { url: "http://localhost:4096" } as never,
+      oracleFetch: use,
+      onSubmit: () => undefined,
+    })
+
+    const event = { preventDefault: () => undefined } as unknown as Event
+
+    await submit.handleSubmit(event)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(oracle).toHaveLength(1)
+    expect(oracle[0]?.url).toBe("http://localhost:4096/session/session-1/oracle")
+    expect(oracle[0]?.body.frozen).toBe(true)
+    expect(promptAsync).toEqual([])
+    expect(optimistic).toHaveLength(2)
+    expect(optimistic.map((item) => item.message.role)).toEqual(["user", "assistant"])
   })
 })

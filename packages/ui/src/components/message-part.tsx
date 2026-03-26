@@ -928,6 +928,7 @@ export function UserMessageDisplay(props: { message: UserMessage; parts: PartTyp
     const items = [agent ? agent[0]?.toUpperCase() + agent.slice(1) : "", model()]
     return items.filter((x) => !!x).join("\u00A0\u00B7\u00A0")
   })
+  const frozen = createMemo(() => props.parts?.some((part) => part.type === "text" && part.metadata?.frozen === true) ?? false)
 
   const metaTail = stamp
 
@@ -1010,7 +1011,16 @@ export function UserMessageDisplay(props: { message: UserMessage; parts: PartTyp
                     {metaHead()}
                   </span>
                 </Show>
-                <Show when={metaHead() && metaTail()}>
+                <Show when={frozen()}>
+                  <span data-slot="user-message-meta-sep" class="text-12-regular text-text-weak cursor-default">
+                    {metaHead() ? "\u00A0\u00B7\u00A0" : ""}
+                  </span>
+                  <span data-slot="user-message-meta" class="text-12-regular text-icon-info-active cursor-default inline-flex items-center gap-1">
+                    <Icon name="snowflake" size="small" />
+                    Frozen
+                  </span>
+                </Show>
+                <Show when={(metaHead() || frozen()) && metaTail()}>
                   <span data-slot="user-message-meta-sep" class="text-12-regular text-text-weak cursor-default">
                     {"\u00A0\u00B7\u00A0"}
                   </span>
@@ -1314,6 +1324,9 @@ PART_MAPPING["text"] = function TextPartDisplay(props) {
     () =>
       props.message.role === "assistant" && (props.message as AssistantMessage).error?.name === "MessageAbortedError",
   )
+  const frozen = createMemo(() =>
+    (data.store.part?.[props.message.id] ?? []).some((part) => part.type === "text" && part.metadata?.frozen === true),
+  )
 
   const model = createMemo(() => {
     if (props.message.role !== "assistant") return ""
@@ -1401,6 +1414,12 @@ PART_MAPPING["text"] = function TextPartDisplay(props) {
                 aria-label={copied() ? i18n.t("ui.message.copied") : i18n.t("ui.message.copyResponse")}
               />
             </Tooltip>
+            <Show when={frozen()}>
+              <span data-slot="text-part-meta" class="text-12-regular text-icon-info-active cursor-default inline-flex items-center gap-1">
+                <Icon name="snowflake" size="small" />
+                Frozen
+              </span>
+            </Show>
             <Show when={meta()}>
               <span data-slot="text-part-meta" class="text-12-regular text-text-weak cursor-default">
                 {meta()}
