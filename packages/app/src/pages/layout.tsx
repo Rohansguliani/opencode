@@ -66,9 +66,13 @@ import { DialogEditProject } from "@/components/dialog-edit-project"
 import { DialogAddProject } from "@/components/dialog-add-project"
 import { DebugBar } from "@/components/debug-bar"
 import { Titlebar } from "@/components/titlebar"
+import { CommentsProvider } from "@/context/comments"
 import { type StoredProject, useServer } from "@/context/server"
+import { FileProvider } from "@/context/file"
 import { useLanguage, type Locale } from "@/context/language"
+import { PromptProvider } from "@/context/prompt"
 import { getWorkspaceState, putWorkspaceState } from "@/utils/workspace-state"
+import { SessionParamsProvider } from "@/hooks/use-session-params"
 import {
   displayName,
   effectiveWorkspaceOrder,
@@ -92,6 +96,7 @@ import {
 } from "./layout/sidebar-workspace"
 import { ProjectDragOverlay, SortableProject, type ProjectSidebarContext } from "./layout/sidebar-project"
 import { CombinedSidebar } from "./layout/sidebar-combined"
+import { ProjectFilePanel } from "./layout/project-file-panel"
 import { SidebarContent } from "./layout/sidebar-shell"
 
 export default function Layout(props: ParentProps) {
@@ -2525,6 +2530,22 @@ export default function Layout(props: ParentProps) {
     )
   }
 
+  const projectFiles = () => (
+    <Show when={params.dir} keyed>
+      {(dir) => (
+        <SessionParamsProvider dir={dir}>
+          <FileProvider>
+            <PromptProvider>
+              <CommentsProvider>
+                <ProjectFilePanel />
+              </CommentsProvider>
+            </PromptProvider>
+          </FileProvider>
+        </SessionParamsProvider>
+      )}
+    </Show>
+  )
+
   return (
     <div class="relative bg-background-base flex-1 min-h-0 min-w-0 flex flex-col select-none [&_input]:select-text [&_textarea]:select-text [&_[contenteditable]]:select-text">
       <Titlebar />
@@ -2618,12 +2639,15 @@ export default function Layout(props: ParentProps) {
             >
               <main
                 classList={{
-                  "size-full overflow-x-hidden flex flex-col items-start contain-strict border-t border-border-weak-base bg-background-base xl:border-l xl:rounded-tl-[12px]": true,
+                  "size-full overflow-x-hidden flex items-start contain-strict border-t border-border-weak-base bg-background-base xl:border-l xl:rounded-tl-[12px]": true,
                 }}
               >
-                <Show when={!autoselecting()} fallback={<div class="size-full" />}>
-                  {props.children}
-                </Show>
+                <div class="flex-1 min-w-0 min-h-0 flex flex-col">
+                  <Show when={!autoselecting()} fallback={<div class="size-full" />}>
+                    {props.children}
+                  </Show>
+                </div>
+                {projectFiles()}
               </main>
             </div>
 
