@@ -313,6 +313,7 @@ export function Titlebar() {
           </div>
           <ModeToggle active={layout.sidebar.gridMode()} label="Grid Mode" toggle={() => toggleMode("grid")} />
           <ModeToggle active={layout.sidebar.niriMode()} label="Niri Mode" toggle={() => toggleMode("niri")} />
+          <ModeToggle active={layout.sidebar.combinedMode()} label="Combined View" toggle={layout.sidebar.toggleCombinedMode} />
           <Show when={params.dir}>
             <TooltipKeybind
               class="hidden xl:flex shrink-0"

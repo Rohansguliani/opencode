@@ -153,6 +153,7 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
             ...sidebar,
             gridMode: sidebar.gridMode ?? false,
             niriMode: sidebar.niriMode ?? false,
+            combinedMode: sidebar.combinedMode ?? false,
           }
         }
         return {
@@ -161,6 +162,7 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
           workspacesDefault: sidebar.workspaces,
           gridMode: sidebar.gridMode ?? false,
           niriMode: sidebar.niriMode ?? false,
+          combinedMode: sidebar.combinedMode ?? false,
         }
       })()
 
@@ -244,6 +246,7 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
           workspacesDefault: false,
           gridMode: false,
           niriMode: false,
+          combinedMode: false,
         },
         terminal: {
           height: DEFAULT_TERMINAL_HEIGHT,
@@ -613,6 +616,7 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
         },
         gridMode: createMemo(() => store.sidebar.gridMode ?? false),
         niriMode: createMemo(() => store.sidebar.niriMode ?? false),
+        combinedMode: createMemo(() => store.sidebar.combinedMode ?? false),
         multiMode: createMemo(() => (store.sidebar.gridMode ?? false) || (store.sidebar.niriMode ?? false)),
         setMode(mode: "grid" | "niri" | undefined) {
           setStore("sidebar", "gridMode", mode === "grid")
@@ -627,6 +631,9 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
           const next = !(store.sidebar.niriMode ?? false)
           setStore("sidebar", "niriMode", next)
           if (next) setStore("sidebar", "gridMode", false)
+        },
+        toggleCombinedMode() {
+          setStore("sidebar", "combinedMode", (x) => !x)
         },
         width: createMemo(() => store.sidebar.width),
         resize(width: number) {

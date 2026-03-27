@@ -17,9 +17,9 @@ import { useLayout, type LocalProject } from "@/context/layout"
 import { useGlobalSync } from "@/context/global-sync"
 import { useLanguage } from "@/context/language"
 import { sessionMode, sessionQuery, sessionValue } from "@/utils/session-layout"
-import { workspaceTitle } from "@/utils/workspace"
+import { stripWorkspace, workspaceTitle } from "@/utils/workspace"
 import { NewSessionItem, SessionItem, SessionSkeleton } from "./sidebar-items"
-import { childMapByParent, sortedRootSessions } from "./helpers"
+import { childMapByParent, displayName, sortedRootSessions } from "./helpers"
 
 type InlineEditorComponent = (props: {
   id: string
@@ -92,6 +92,7 @@ const WorkspaceHeader = (props: {
   busy: Accessor<boolean>
   open: Accessor<boolean>
   directory: string
+  combined?: boolean
   language: ReturnType<typeof useLanguage>
   branch: Accessor<string | undefined>
   workspaceValue: Accessor<string>
@@ -100,43 +101,67 @@ const WorkspaceHeader = (props: {
   renameWorkspace: WorkspaceSidebarContext["renameWorkspace"]
   setEditor: WorkspaceSidebarContext["setEditor"]
   projectId?: string
+  project: LocalProject
 }): JSX.Element => (
-  <div class="flex items-center gap-1 min-w-0 flex-1">
-    <div class="flex items-center justify-center shrink-0 size-6">
-      <Show when={props.busy()} fallback={<Icon name="branch" size="small" />}>
-        <Spinner class="size-[15px]" />
+  <div class="flex items-center gap-1.5 min-w-0 flex-1">
+    <Show when={props.combined}>
+      <div class="flex items-center justify-center shrink-0 size-4 text-icon-weak transition-transform opacity-70 group-hover/workspace:opacity-100">
+        <Icon name={props.open() ? "chevron-down" : "chevron-right"} size="small" />
+      </div>
+    </Show>
+    <Show when={!props.combined}>
+      <div class="flex items-center justify-center shrink-0 size-6">
+        <Show when={props.busy()} fallback={<Icon name="branch" size="small" />}>
+          <Spinner class="size-[15px]" />
+        </Show>
+      </div>
+    </Show>
+    <div class="min-w-0 flex-1 flex flex-col justify-center gap-0.5">
+      <div class="flex items-center gap-1 min-w-0">
+        <Show when={!props.combined}>
+          <span class="text-14-medium text-text-base shrink-0">
+            {props.local() ? props.language.t("workspace.type.local") : props.language.t("workspace.type.sandbox")} :
+          </span>
+        </Show>
+        <Show
+          when={!props.local()}
+          fallback={
+            <span class="text-14-medium text-text-strong min-w-0 truncate text-left w-full">
+              {props.combined ? displayName(props.project) : (props.branch() ?? workspaceTitle(props.directory))}
+            </span>
+          }
+        >
+          <props.InlineEditor
+            id={`workspace:${props.directory}`}
+            value={props.workspaceValue}
+            onSave={(next) => {
+              const trimmed = next.trim()
+              if (!trimmed) return
+              props.renameWorkspace(props.directory, trimmed, props.projectId, props.branch())
+              props.setEditor("value", props.workspaceValue())
+            }}
+            class="text-14-medium text-text-strong min-w-0 truncate text-left w-full"
+            displayClass="text-14-medium text-text-strong min-w-0 truncate text-left w-full"
+            editing={props.workspaceEditActive()}
+            stopPropagation={false}
+            openOnDblClick={false}
+          />
+        </Show>
+      </div>
+      <Show when={props.combined}>
+        <span class="text-12-regular text-text-weak min-w-0 truncate text-left w-full">{stripWorkspace(props.directory)}</span>
       </Show>
     </div>
-    <span class="text-14-medium text-text-base shrink-0">
-      {props.local() ? props.language.t("workspace.type.local") : props.language.t("workspace.type.sandbox")} :
-    </span>
-    <Show
-      when={!props.local()}
-      fallback={
-        <span class="text-14-medium text-text-base min-w-0 truncate">
-          {props.branch() ?? workspaceTitle(props.directory)}
-        </span>
-      }
-    >
-      <props.InlineEditor
-        id={`workspace:${props.directory}`}
-        value={props.workspaceValue}
-        onSave={(next) => {
-          const trimmed = next.trim()
-          if (!trimmed) return
-          props.renameWorkspace(props.directory, trimmed, props.projectId, props.branch())
-          props.setEditor("value", props.workspaceValue())
+    <Show when={!props.combined}>
+      <div
+        class="flex items-center justify-center shrink-0 overflow-hidden transition-all duration-200 group-hover/workspace:w-3.5 group-hover/workspace:opacity-100 group-focus-within/workspace:w-3.5 group-focus-within/workspace:opacity-100"
+        classList={{
+          "w-0 opacity-0": true,
         }}
-        class="text-14-medium text-text-base min-w-0 truncate"
-        displayClass="text-14-medium text-text-base min-w-0 truncate"
-        editing={props.workspaceEditActive()}
-        stopPropagation={false}
-        openOnDblClick={false}
-      />
+      >
+        <Icon name={props.open() ? "chevron-down" : "chevron-right"} size="small" class="text-icon-base" />
+      </div>
     </Show>
-    <div class="flex items-center justify-center shrink-0 overflow-hidden w-0 opacity-0 transition-all duration-200 group-hover/workspace:w-3.5 group-hover/workspace:opacity-100 group-focus-within/workspace:w-3.5 group-focus-within/workspace:opacity-100">
-      <Icon name={props.open() ? "chevron-down" : "chevron-right"} size="small" class="text-icon-base" />
-    </div>
   </div>
 )
 
@@ -159,12 +184,14 @@ const WorkspaceActions = (props: {
   setHoverSession: WorkspaceSidebarContext["setHoverSession"]
   clearHoverProjectSoon: WorkspaceSidebarContext["clearHoverProjectSoon"]
   navigateToNewSession: () => void
+  combined?: boolean
+  closeProject?: () => void
 }): JSX.Element => (
   <div
     class="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5 transition-opacity"
     classList={{
-      "opacity-100 pointer-events-auto": props.menuOpen(),
-      "opacity-0 pointer-events-none": !props.menuOpen(),
+      "opacity-100 pointer-events-auto": props.menuOpen() || props.combined,
+      "opacity-0 pointer-events-none": !props.menuOpen() && !props.combined,
       "group-hover/workspace:opacity-100 group-hover/workspace:pointer-events-auto": true,
       "group-focus-within/workspace:opacity-100 group-focus-within/workspace:pointer-events-auto": true,
     }}
@@ -215,15 +242,21 @@ const WorkspaceActions = (props: {
           >
             <DropdownMenu.ItemLabel>{props.language.t("common.delete")}</DropdownMenu.ItemLabel>
           </DropdownMenu.Item>
+          <Show when={props.combined && props.closeProject && props.local()}>
+            <DropdownMenu.Separator />
+            <DropdownMenu.Item onSelect={props.closeProject}>
+              <DropdownMenu.ItemLabel>{props.language.t("common.close")}</DropdownMenu.ItemLabel>
+            </DropdownMenu.Item>
+          </Show>
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
     </DropdownMenu>
-    <Show when={!props.touch()}>
+    <Show when={!props.touch() || props.combined}>
       <Tooltip value={props.language.t("command.session.new")} placement="top">
         <IconButton
-          icon="new-session"
+          icon="plus-small"
           variant="ghost"
-          class="size-6 rounded-md opacity-0 pointer-events-none group-hover/workspace:opacity-100 group-hover/workspace:pointer-events-auto group-focus-within/workspace:opacity-100 group-focus-within/workspace:pointer-events-auto"
+          class="size-6 rounded-md"
           data-action="workspace-new-session"
           data-workspace={base64Encode(props.directory)}
           aria-label={props.language.t("command.session.new")}
@@ -255,6 +288,7 @@ const WorkspaceSessionList = (props: {
   hasMore: Accessor<boolean>
   loadMore: () => Promise<void>
   language: ReturnType<typeof useLanguage>
+  combined?: boolean
 }): JSX.Element => {
   const pinnedSessions = createMemo(() => props.sessions().filter((s) => isSessionPinned(s.id)))
   const unpinnedSessions = createMemo(() => props.sessions().filter((s) => !isSessionPinned(s.id)))
@@ -275,9 +309,11 @@ const WorkspaceSessionList = (props: {
       </Show>
       
       <Show when={pinnedSessions().length > 0}>
-        <div class="px-2 py-1 mt-1 text-[11px] font-medium text-text-weak uppercase tracking-wider">
-          {props.language.t("common.pinned") || "PINNED_TEST"}
-        </div>
+        <Show when={!props.combined}>
+          <div class="px-2 py-1 mt-1 text-[11px] font-medium text-text-weak uppercase tracking-wider">
+            {props.language.t("common.pinned") || "PINNED_TEST"}
+          </div>
+        </Show>
         <For each={pinnedSessions()}>
           {(session) => (
             <SessionItem
@@ -303,9 +339,11 @@ const WorkspaceSessionList = (props: {
             />
           )}
         </For>
-        <div class="px-2 py-1 mt-1 text-[11px] font-medium text-text-weak uppercase tracking-wider">
-          {props.language.t("common.recent") || "Recent"}
-        </div>
+        <Show when={!props.combined}>
+          <div class="px-2 py-1 mt-1 text-[11px] font-medium text-text-weak uppercase tracking-wider">
+            {props.language.t("common.recent") || "Recent"}
+          </div>
+        </Show>
       </Show>
 
       <For each={unpinnedSessions()}>
@@ -352,13 +390,15 @@ const WorkspaceSessionList = (props: {
   )
 }
 
-export const SortableWorkspace = (props: {
+export const WorkspaceItem = (props: {
   ctx: WorkspaceSidebarContext
   directory: string
   project: LocalProject
   sortNow: Accessor<number>
   mobile?: boolean
   popover?: boolean
+  combined?: boolean
+  closeProject?: () => void
 }): JSX.Element => {
   const navigate = useNavigate()
   const params = useParams()
@@ -366,7 +406,6 @@ export const SortableWorkspace = (props: {
   const layout = useLayout()
   const globalSync = useGlobalSync()
   const language = useLanguage()
-  const sortable = createSortable(props.directory)
   const [workspaceStore, setWorkspaceStore] = globalSync.child(props.directory, { bootstrap: false })
   const [menu, setMenu] = createStore({
     open: false,
@@ -407,6 +446,7 @@ export const SortableWorkspace = (props: {
       busy={busy}
       open={open}
       directory={props.directory}
+      combined={props.combined}
       language={language}
       branch={() => workspaceStore.vcs?.branch}
       workspaceValue={workspaceValue}
@@ -415,6 +455,7 @@ export const SortableWorkspace = (props: {
       renameWorkspace={props.ctx.renameWorkspace}
       setEditor={props.ctx.setEditor}
       projectId={props.project.id}
+      project={props.project}
     />
   )
 
@@ -430,77 +471,73 @@ export const SortableWorkspace = (props: {
   })
 
   return (
-    <div
-      // @ts-ignore
-      use:sortable
-      classList={{
-        "opacity-30": sortable.isActiveDraggable,
-        "opacity-50 pointer-events-none": busy(),
-      }}
-    >
-      <Collapsible variant="ghost" open={open()} class="shrink-0" onOpenChange={openWrapper}>
-        <div class="py-1">
-          <div
-            class="group/workspace relative"
-            data-component="workspace-item"
-            data-workspace={base64Encode(props.directory)}
-          >
-            <div class="flex items-center gap-1">
-              <Show
-                when={workspaceEditActive()}
-                fallback={
-                  <Collapsible.Trigger
-                    class={`flex items-center justify-between w-full pl-2 py-1.5 rounded-md hover:bg-surface-raised-base-hover transition-[padding] duration-200 ${
-                      menu.open ? "pr-16" : "pr-2"
-                    } group-hover/workspace:pr-16 group-focus-within/workspace:pr-16`}
-                    data-action="workspace-toggle"
-                    data-workspace={base64Encode(props.directory)}
-                  >
-                    {header()}
-                  </Collapsible.Trigger>
-                }
-              >
-                <div
-                  class={`flex items-center justify-between w-full pl-2 py-1.5 rounded-md transition-[padding] duration-200 ${
-                    menu.open ? "pr-16" : "pr-2"
-                  } group-hover/workspace:pr-16 group-focus-within/workspace:pr-16`}
+    <Collapsible variant="ghost" open={open()} class="shrink-0" onOpenChange={openWrapper}>
+      <div class="py-1">
+        <div
+          class="group/workspace relative"
+          classList={{}}
+          data-component="workspace-item"
+          data-workspace={base64Encode(props.directory)}
+        >
+          <div class="flex items-center gap-1">
+            <Show
+              when={workspaceEditActive()}
+              fallback={
+                <Collapsible.Trigger
+                  class={`flex items-center justify-between w-full py-1.5 rounded-md hover:bg-surface-raised-base-hover transition-[padding] duration-200 ${
+                    menu.open || props.combined ? "pr-16" : "pr-2"
+                  } ${props.combined ? "pl-1" : "pl-2"} group-hover/workspace:pr-16 group-focus-within/workspace:pr-16`}
+                  data-action="workspace-toggle"
+                  data-workspace={base64Encode(props.directory)}
                 >
                   {header()}
-                </div>
-              </Show>
-              <WorkspaceActions
-                directory={props.directory}
-                local={local}
-                busy={busy}
-                menuOpen={() => menu.open}
-                pendingRename={() => menu.pendingRename}
-                setMenuOpen={(open) => setMenu("open", open)}
-                setPendingRename={(value) => setMenu("pendingRename", value)}
-                sidebarHovering={props.ctx.sidebarHovering}
-                touch={touch}
-                language={language}
-                workspaceValue={workspaceValue}
-                openEditor={props.ctx.openEditor}
-                showResetWorkspaceDialog={props.ctx.showResetWorkspaceDialog}
-                showDeleteWorkspaceDialog={props.ctx.showDeleteWorkspaceDialog}
-                root={props.project.worktree}
-                setHoverSession={props.ctx.setHoverSession}
-                clearHoverProjectSoon={props.ctx.clearHoverProjectSoon}
-                navigateToNewSession={() => {
-                  const mode = sessionMode(layout.sidebar)
-                  const value = sessionValue(mode, searchParams) ?? (params.dir === slug() ? params.id : undefined)
-                  if (mode && value !== undefined) {
-                    navigate(`/${slug()}/session${sessionQuery(mode, `${value},`)}`)
-                    return
-                  }
-                  navigate(`/${slug()}/session`)
-                }}
-              />
-            </div>
+                </Collapsible.Trigger>
+              }
+            >
+              <div
+                class={`flex items-center justify-between w-full py-1.5 rounded-md transition-[padding] duration-200 ${
+                  menu.open || props.combined ? "pr-16" : "pr-2"
+                } ${props.combined ? "pl-1" : "pl-2"} group-hover/workspace:pr-16 group-focus-within/workspace:pr-16`}
+              >
+                {header()}
+              </div>
+            </Show>
+            <WorkspaceActions
+              directory={props.directory}
+              local={local}
+              busy={busy}
+              menuOpen={() => menu.open}
+              pendingRename={() => menu.pendingRename}
+              setMenuOpen={(open) => setMenu("open", open)}
+              setPendingRename={(value) => setMenu("pendingRename", value)}
+              sidebarHovering={props.ctx.sidebarHovering}
+              touch={touch}
+              language={language}
+              workspaceValue={workspaceValue}
+              openEditor={props.ctx.openEditor}
+              showResetWorkspaceDialog={props.ctx.showResetWorkspaceDialog}
+              showDeleteWorkspaceDialog={props.ctx.showDeleteWorkspaceDialog}
+              root={props.project.worktree}
+              setHoverSession={props.ctx.setHoverSession}
+              clearHoverProjectSoon={props.ctx.clearHoverProjectSoon}
+              combined={props.combined}
+              closeProject={props.closeProject}
+              navigateToNewSession={() => {
+                const mode = sessionMode(layout.sidebar)
+                const value = sessionValue(mode, searchParams) ?? (params.dir === slug() ? params.id : undefined)
+                if (mode && value !== undefined) {
+                  navigate(`/${slug()}/session${sessionQuery(mode, `${value},`)}`)
+                  return
+                }
+                navigate(`/${slug()}/session`)
+              }}
+            />
           </div>
         </div>
+      </div>
 
-        <Collapsible.Content>
+      <Collapsible.Content>
+        <div classList={{ "pl-6 pb-2 pr-2": !!props.combined }}>
           <WorkspaceSessionList
             directory={props.directory}
             slug={slug}
@@ -514,9 +551,35 @@ export const SortableWorkspace = (props: {
             hasMore={hasMore}
             loadMore={loadMore}
             language={language}
+            combined={props.combined}
           />
-        </Collapsible.Content>
-      </Collapsible>
+        </div>
+      </Collapsible.Content>
+    </Collapsible>
+  )
+}
+
+export const SortableWorkspace = (props: {
+  ctx: WorkspaceSidebarContext
+  directory: string
+  project: LocalProject
+  sortNow: Accessor<number>
+  mobile?: boolean
+  popover?: boolean
+}): JSX.Element => {
+  const sortable = createSortable(props.directory)
+  const busy = createMemo(() => props.ctx.isBusy(props.directory))
+
+  return (
+    <div
+      // @ts-ignore
+      use:sortable
+      classList={{
+        "opacity-30": sortable.isActiveDraggable,
+        "opacity-50 pointer-events-none": busy(),
+      }}
+    >
+      <WorkspaceItem {...props} />
     </div>
   )
 }

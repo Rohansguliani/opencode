@@ -91,6 +91,7 @@ import {
   type WorkspaceSidebarContext,
 } from "./layout/sidebar-workspace"
 import { ProjectDragOverlay, SortableProject, type ProjectSidebarContext } from "./layout/sidebar-project"
+import { CombinedSidebar } from "./layout/sidebar-combined"
 import { SidebarContent } from "./layout/sidebar-shell"
 
 export default function Layout(props: ParentProps) {
@@ -764,7 +765,19 @@ export default function Layout(props: ParentProps) {
     return layout.sidebar.workspaces(project.worktree)()
   })
 
+  const combined = createMemo(() => layout.sidebar.combinedMode())
+
+  const allWorkspaceDirs = createMemo(() => {
+    const result: string[] = []
+    for (const project of layout.projects.list()) {
+      result.push(...workspaceIds(project))
+    }
+    return result
+  })
+
   const visibleSessionDirs = createMemo(() => {
+    if (combined()) return allWorkspaceDirs()
+
     const project = currentProject()
     if (!project) return [] as string[]
     if (!workspaceSetting()) return [project.worktree]
@@ -780,6 +793,7 @@ export default function Layout(props: ParentProps) {
   createEffect(() => {
     if (!pageReady()) return
     if (!layoutReady()) return
+    if (combined()) return
     const projects = layout.projects.list()
     for (const [directory, expanded] of Object.entries(store.workspaceExpanded)) {
       if (!expanded) continue
@@ -1931,9 +1945,13 @@ export default function Layout(props: ParentProps) {
   )
 
   createEffect(() => {
-    const sidebarWidth = layout.sidebar.opened() ? layout.sidebar.width() : 48
+    const sidebarWidth = layout.sidebar.opened() ? layout.sidebar.width() : combined() ? 0 : 48
     document.documentElement.style.setProperty("--dialog-left-margin", `${sidebarWidth}px`)
   })
+
+  const sidebarWidth = createMemo(() => Math.max(layout.sidebar.width(), 244))
+  const sidebarLeft = createMemo(() => (layout.sidebar.opened() ? `${sidebarWidth()}px` : combined() ? "0px" : "4rem"))
+  const desktopSidebarWidth = createMemo(() => (combined() ? (layout.sidebar.opened() ? `${sidebarWidth()}px` : "0px") : `${sidebarWidth()}px`))
 
   const loadedSessionDirs = new Set<string>()
 
@@ -2447,38 +2465,61 @@ export default function Layout(props: ParentProps) {
 
   const projects = () => layout.projects.list()
   const projectOverlay = () => <ProjectDragOverlay projects={projects} activeProject={() => store.activeProject} />
-  const sidebarContent = (mobile?: boolean) => (
-    <SidebarContent
-      mobile={mobile}
-      opened={() => layout.sidebar.opened()}
-      aimMove={aim.move}
-      projects={projects}
-      renderProject={(project) => (
-        <SortableProject ctx={projectSidebarCtx} project={project} sortNow={sortNow} mobile={mobile} />
-      )}
-      handleDragStart={handleDragStart}
-      handleDragEnd={handleDragEnd}
-      handleDragOver={handleDragOver}
-      openProjectLabel={language.t("command.project.open")}
-      openProjectKeybind={() => command.keybind("project.open")}
-      onOpenProject={chooseProject}
-      renderProjectOverlay={projectOverlay}
-      settingsLabel={() => language.t("sidebar.settings")}
-      settingsKeybind={() => command.keybind("settings.open")}
-      onOpenSettings={openSettings}
-      helpLabel={() => language.t("sidebar.help")}
-      onOpenHelp={() => platform.openLink("https://opencode.ai/desktop-feedback")}
-      renderPanel={() =>
-        mobile ? (
-          <SidebarPanel project={currentProject} mobile />
-        ) : (
-          <Show when={currentProject()}>
-            <SidebarPanel project={currentProject} merged />
-          </Show>
-        )
-      }
-    />
-  )
+  const sidebarContent = (mobile?: boolean) => {
+    if (combined()) {
+      return (
+        <CombinedSidebar
+          mobile={mobile}
+          opened={() => layout.sidebar.opened()}
+          projects={projects}
+          workspaceIds={workspaceIds}
+          workspacesEnabled={(project) => project.vcs === "git" && layout.sidebar.workspaces(project.worktree)()}
+          toggleProjectWorkspaces={toggleProjectWorkspaces}
+          showEditProjectDialog={showEditProjectDialog}
+          closeProject={closeProject}
+          createWorkspace={createWorkspace}
+          chooseProject={chooseProject}
+          openSettings={openSettings}
+          openHelp={() => platform.openLink("https://opencode.ai/desktop-feedback")}
+          sortNow={sortNow}
+          ctx={workspaceSidebarCtx}
+        />
+      )
+    }
+
+    return (
+      <SidebarContent
+        mobile={mobile}
+        opened={() => layout.sidebar.opened()}
+        aimMove={aim.move}
+        projects={projects}
+        renderProject={(project) => (
+          <SortableProject ctx={projectSidebarCtx} project={project} sortNow={sortNow} mobile={mobile} />
+        )}
+        handleDragStart={handleDragStart}
+        handleDragEnd={handleDragEnd}
+        handleDragOver={handleDragOver}
+        openProjectLabel={language.t("command.project.open")}
+        openProjectKeybind={() => command.keybind("project.open")}
+        onOpenProject={chooseProject}
+        renderProjectOverlay={projectOverlay}
+        settingsLabel={() => language.t("sidebar.settings")}
+        settingsKeybind={() => command.keybind("settings.open")}
+        onOpenSettings={openSettings}
+        helpLabel={() => language.t("sidebar.help")}
+        onOpenHelp={() => platform.openLink("https://opencode.ai/desktop-feedback")}
+        renderPanel={() =>
+          mobile ? (
+            <SidebarPanel project={currentProject} mobile />
+          ) : (
+            <Show when={currentProject()}>
+              <SidebarPanel project={currentProject} merged />
+            </Show>
+          )
+        }
+      />
+    )
+  }
 
   return (
     <div class="relative bg-background-base flex-1 min-h-0 min-w-0 flex flex-col select-none [&_input]:select-text [&_textarea]:select-text [&_[contenteditable]]:select-text">
@@ -2494,7 +2535,7 @@ export default function Layout(props: ParentProps) {
                 "absolute inset-y-0 left-0": true,
                 "z-10": true,
               }}
-              style={{ width: `${Math.max(layout.sidebar.width(), 244)}px` }}
+              style={{ width: desktopSidebarWidth() }}
               ref={(el) => {
                 setState("nav", el)
               }}
@@ -2531,7 +2572,7 @@ export default function Layout(props: ParentProps) {
 
             <div
               class="hidden xl:block pointer-events-none absolute top-0 right-0 z-0 border-t border-border-weaker-base"
-              style={{ left: "calc(4rem + 12px)" }}
+              style={{ left: `calc(${sidebarLeft()} + 12px)` }}
             />
 
             <div class="xl:hidden">
@@ -2568,7 +2609,7 @@ export default function Layout(props: ParentProps) {
                   !state.sizing,
               }}
               style={{
-                "--main-left": layout.sidebar.opened() ? `${Math.max(layout.sidebar.width(), 244)}px` : "4rem",
+                "--main-left": sidebarLeft(),
               }}
             >
               <main
