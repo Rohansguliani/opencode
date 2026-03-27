@@ -39,6 +39,7 @@ When enabled, the app should stop feeling like separate per-workspace sidebars a
 - Workspace folders in combined view use the project name (if local root) or branch name, plus the directory path underneath, without the `local:` / `sandbox:` label treatment.
 - Each workspace folder keeps an explicit `+` action so new chats can be created directly under that workspace.
 - Workspace folders in combined view omit all borders and box backgrounds, ensuring a seamless, standard tree-like UI, with nested chats cleanly indented underneath.
+- Projects are draggable! Using `SortableProvider` and `DragDropProvider`, the workspace folders can be reordered via drag-and-drop. Since workspaces map directly from the project list, dragging a project's workspace folder transparently reorders the underlying project.
 
 ### Navigation Semantics
 - Combined view broadens visible sidebar session scope from the current project to all open workspace directories.

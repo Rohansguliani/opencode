@@ -2483,6 +2483,10 @@ export default function Layout(props: ParentProps) {
           openHelp={() => platform.openLink("https://opencode.ai/desktop-feedback")}
           sortNow={sortNow}
           ctx={workspaceSidebarCtx}
+          handleDragStart={handleDragStart}
+          handleDragEnd={handleDragEnd}
+          handleDragOver={handleDragOver}
+          renderProjectOverlay={projectOverlay}
         />
       )
     }

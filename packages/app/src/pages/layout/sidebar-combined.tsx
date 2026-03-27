@@ -1,10 +1,48 @@
 import { type Accessor, For, Show, type JSX } from "solid-js"
+import { DragDropProvider, DragDropSensors, SortableProvider, DragOverlay, createSortable, closestCenter } from "@thisbeyond/solid-dnd"
 import { Button } from "@opencode-ai/ui/button"
 import { IconButton } from "@opencode-ai/ui/icon-button"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { useLanguage } from "@/context/language"
 import { type LocalProject } from "@/context/layout"
 import { WorkspaceItem, type WorkspaceSidebarContext } from "./sidebar-workspace"
+
+function SortableCombinedProject(props: {
+  project: LocalProject
+  sortNow: Accessor<number>
+  workspaceIds: (project: LocalProject) => string[]
+  mobile?: boolean
+  opened: Accessor<boolean>
+  ctx: WorkspaceSidebarContext
+  closeProject: (directory: string) => void
+}) {
+  const sortable = createSortable(props.project.worktree)
+  return (
+    <div
+      // @ts-ignore
+      use:sortable
+      classList={{
+        "opacity-30": sortable.isActiveDraggable,
+        "pointer-events-none": sortable.isActiveDraggable,
+      }}
+    >
+      <For each={props.workspaceIds(props.project)}>
+        {(directory) => (
+          <WorkspaceItem
+            ctx={props.ctx}
+            directory={directory}
+            project={props.project}
+            sortNow={props.sortNow}
+            mobile={props.mobile}
+            popover={!props.mobile && props.opened()}
+            combined
+            closeProject={() => props.closeProject(props.project.worktree)}
+          />
+        )}
+      </For>
+    </div>
+  )
+}
 
 export function CombinedSidebar(props: {
   mobile?: boolean
@@ -21,6 +59,10 @@ export function CombinedSidebar(props: {
   openHelp: () => void
   sortNow: Accessor<number>
   ctx: WorkspaceSidebarContext
+  handleDragStart: (event: unknown) => void
+  handleDragEnd: () => void
+  handleDragOver: (event: any) => void
+  renderProjectOverlay: () => JSX.Element
 }): JSX.Element {
   const language = useLanguage()
 
@@ -68,24 +110,30 @@ export function CombinedSidebar(props: {
           }
         >
           <div class="p-2 flex flex-col gap-1">
-            <For each={props.projects()}>
-              {(project) => (
-                <For each={props.workspaceIds(project)}>
-                  {(directory) => (
-                    <WorkspaceItem
-                      ctx={props.ctx}
-                      directory={directory}
+            <DragDropProvider
+              onDragStart={props.handleDragStart}
+              onDragEnd={props.handleDragEnd}
+              onDragOver={props.handleDragOver}
+              collisionDetector={closestCenter}
+            >
+              <DragDropSensors />
+              <SortableProvider ids={props.projects().map((p) => p.worktree)}>
+                <For each={props.projects()}>
+                  {(project) => (
+                    <SortableCombinedProject
                       project={project}
                       sortNow={props.sortNow}
+                      workspaceIds={props.workspaceIds}
                       mobile={props.mobile}
-                      popover={!props.mobile && props.opened()}
-                      combined
-                      closeProject={() => props.closeProject(project.worktree)}
+                      opened={props.opened}
+                      ctx={props.ctx}
+                      closeProject={props.closeProject}
                     />
                   )}
                 </For>
-              )}
-            </For>
+              </SortableProvider>
+              <DragOverlay>{props.renderProjectOverlay()}</DragOverlay>
+            </DragDropProvider>
           </div>
         </Show>
       </div>
