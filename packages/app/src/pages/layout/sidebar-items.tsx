@@ -160,7 +160,7 @@ const SessionRow = (props: {
       }
     }}
   >
-    <div class="flex items-center gap-1 w-full">
+    <div class="flex items-center gap-1.5 w-full">
       <Show when={props.isWorking() || props.hasPermissions() || props.hasError() || props.unseenCount() > 0 || props.isPinned()}>
         <div
           class="shrink-0 size-6 flex items-center justify-center"
@@ -189,8 +189,8 @@ const SessionRow = (props: {
         id={`session:${props.session.id}`}
         value={() => props.session.title}
         onSave={(next) => props.renameSession(props.session, next)}
-        class="text-14-regular text-text-strong grow-1 min-w-0 overflow-hidden text-ellipsis truncate"
-        displayClass="text-14-regular text-text-strong grow-1 min-w-0 overflow-hidden text-ellipsis truncate"
+        class={`text-13-regular grow-1 min-w-0 overflow-hidden text-ellipsis truncate ${props.isActive() ? "text-icon-brand-base font-medium" : "text-text-strong"}`}
+        displayClass={`text-13-regular grow-1 min-w-0 overflow-hidden text-ellipsis truncate ${props.isActive() ? "text-icon-brand-base font-medium" : "text-text-strong"}`}
         openOnDblClick
       />
     </div>
@@ -354,7 +354,7 @@ export const SessionItem = (props: SessionItemProps): JSX.Element => {
   return (
     <div
       data-session-id={props.session.id}
-      class="group/session relative w-full rounded-md cursor-default pl-2 pr-3 transition-colors hover:bg-surface-raised-base-hover [&:has(:focus-visible)]:bg-surface-raised-base-hover has-[[data-expanded]]:bg-surface-raised-base-hover has-[.active]:bg-surface-base-active"
+      class="group/session relative w-full rounded-md cursor-default pl-2 pr-3 transition-colors hover:bg-surface-raised-base-hover [&:has(:focus-visible)]:bg-surface-raised-base-hover has-[[data-expanded]]:bg-surface-raised-base-hover"
     >
       <Show
         when={hoverEnabled()}
@@ -465,7 +465,7 @@ export const NewSessionItem = (props: {
         <div class="shrink-0 size-6 flex items-center justify-center">
           <Icon name="new-session" size="small" class="text-icon-weak" />
         </div>
-        <span class="text-14-regular text-text-strong grow-1 min-w-0 overflow-hidden text-ellipsis truncate">
+        <span class="text-13-regular text-text-strong grow-1 min-w-0 overflow-hidden text-ellipsis truncate">
           {label}
         </span>
       </div>
@@ -510,7 +510,7 @@ export const GridToggleItem = (props: {
         <div class="shrink-0 size-6 flex items-center justify-center">
           <Icon name="expand" size="small" class={active() ? "text-icon-brand-base" : "text-icon-weak"} />
         </div>
-        <span class={`text-14-regular grow-1 min-w-0 overflow-hidden text-ellipsis truncate ${active() ? "text-icon-brand-base font-medium" : "text-text-strong"}`}>
+        <span class={`text-13-regular grow-1 min-w-0 overflow-hidden text-ellipsis truncate ${active() ? "text-icon-brand-base font-medium" : "text-text-strong"}`}>
           {label}
         </span>
         <Show when={active()}>

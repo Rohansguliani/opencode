@@ -70,7 +70,10 @@ import { CommentsProvider } from "@/context/comments"
 import { type StoredProject, useServer } from "@/context/server"
 import { FileProvider } from "@/context/file"
 import { useLanguage, type Locale } from "@/context/language"
+import { LocalProvider } from "@/context/local"
 import { PromptProvider } from "@/context/prompt"
+import { SDKProvider } from "@/context/sdk"
+import { SyncProvider } from "@/context/sync"
 import { getWorkspaceState, putWorkspaceState } from "@/utils/workspace-state"
 import { SessionParamsProvider } from "@/hooks/use-session-params"
 import {
@@ -2534,13 +2537,19 @@ export default function Layout(props: ParentProps) {
     <Show when={params.dir} keyed>
       {(dir) => (
         <SessionParamsProvider dir={dir}>
-          <FileProvider>
-            <PromptProvider>
-              <CommentsProvider>
-                <ProjectFilePanel />
-              </CommentsProvider>
-            </PromptProvider>
-          </FileProvider>
+          <SDKProvider directory={() => currentDir()}>
+            <SyncProvider>
+              <LocalProvider>
+                <FileProvider>
+                  <PromptProvider>
+                    <CommentsProvider>
+                      <ProjectFilePanel />
+                    </CommentsProvider>
+                  </PromptProvider>
+                </FileProvider>
+              </LocalProvider>
+            </SyncProvider>
+          </SDKProvider>
         </SessionParamsProvider>
       )}
     </Show>
@@ -2639,10 +2648,10 @@ export default function Layout(props: ParentProps) {
             >
               <main
                 classList={{
-                  "size-full overflow-x-hidden flex items-start contain-strict border-t border-border-weak-base bg-background-base xl:border-l xl:rounded-tl-[12px]": true,
+                  "size-full overflow-x-hidden flex contain-strict border-t border-border-weak-base bg-background-base xl:border-l xl:rounded-tl-[12px]": true,
                 }}
               >
-                <div class="flex-1 min-w-0 min-h-0 flex flex-col">
+                <div class="flex-1 min-w-0 h-full flex flex-col relative">
                   <Show when={!autoselecting()} fallback={<div class="size-full" />}>
                     {props.children}
                   </Show>

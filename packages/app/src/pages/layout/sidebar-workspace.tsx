@@ -294,7 +294,7 @@ const WorkspaceSessionList = (props: {
   const unpinnedSessions = createMemo(() => props.sessions().filter((s) => !isSessionPinned(s.id)))
 
   return (
-    <nav class="flex flex-col gap-1">
+    <nav class="flex flex-col gap-0.5">
       <Show when={props.showNew()}>
         <NewSessionItem
           slug={props.slug()}
