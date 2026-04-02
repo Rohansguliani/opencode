@@ -1994,6 +1994,7 @@ export default function Layout(props: ParentProps) {
     setEditor,
     InlineEditor,
     isBusy,
+    isLoadingSessions: globalSync.isLoadingSessions,
     workspaceExpanded: (directory, local) => store.workspaceExpanded[directory] ?? local,
     setWorkspaceExpanded: (directory, value) => setStore("workspaceExpanded", directory, value),
     showResetWorkspaceDialog: (root, directory) =>

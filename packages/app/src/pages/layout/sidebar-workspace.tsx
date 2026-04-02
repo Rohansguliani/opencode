@@ -53,6 +53,7 @@ export type WorkspaceSidebarContext = {
   setEditor: (key: "value", value: string) => void
   InlineEditor: InlineEditorComponent
   isBusy: (directory: string) => boolean
+  isLoadingSessions: (directory: string) => boolean
   workspaceExpanded: (directory: string, local: boolean) => boolean
   setWorkspaceExpanded: (directory: string, value: boolean) => void
   showResetWorkspaceDialog: (root: string, directory: string) => void
@@ -404,7 +405,7 @@ export const WorkspaceItem = (props: {
   const hasMore = createMemo(() => workspaceStore.sessionTotal > sessions().length)
   const busy = createMemo(() => props.ctx.isBusy(props.directory))
   const wasBusy = createMemo((prev) => prev || busy(), false)
-  const loading = createMemo(() => open() && !booted() && sessions().length === 0 && !wasBusy())
+  const loading = createMemo(() => open() && !booted() && props.ctx.isLoadingSessions(props.directory) && sessions().length === 0 && !wasBusy())
   const touch = createMediaQuery("(hover: none)")
   const showNew = createMemo(() => !loading() && (touch() || sessions().length === 0 || (active() && !params.id)))
   const loadMore = async () => {
