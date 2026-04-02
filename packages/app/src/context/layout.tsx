@@ -153,16 +153,12 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
             ...sidebar,
             gridMode: sidebar.gridMode ?? false,
             niriMode: sidebar.niriMode ?? false,
-            combinedMode: sidebar.combinedMode ?? false,
           }
         }
         return {
           ...sidebar,
-          workspaces: {},
-          workspacesDefault: sidebar.workspaces,
           gridMode: sidebar.gridMode ?? false,
           niriMode: sidebar.niriMode ?? false,
-          combinedMode: sidebar.combinedMode ?? false,
         }
       })()
 
@@ -242,11 +238,8 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
         sidebar: {
           opened: false,
           width: DEFAULT_PANEL_WIDTH,
-          workspaces: {} as Record<string, boolean>,
-          workspacesDefault: false,
           gridMode: false,
           niriMode: false,
-          combinedMode: false,
         },
         terminal: {
           height: DEFAULT_TERMINAL_HEIGHT,
@@ -616,7 +609,6 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
         },
         gridMode: createMemo(() => store.sidebar.gridMode ?? false),
         niriMode: createMemo(() => store.sidebar.niriMode ?? false),
-        combinedMode: createMemo(() => store.sidebar.combinedMode ?? false),
         multiMode: createMemo(() => (store.sidebar.gridMode ?? false) || (store.sidebar.niriMode ?? false)),
         setMode(mode: "grid" | "niri" | undefined) {
           setStore("sidebar", "gridMode", mode === "grid")
@@ -632,22 +624,9 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
           setStore("sidebar", "niriMode", next)
           if (next) setStore("sidebar", "gridMode", false)
         },
-        toggleCombinedMode() {
-          setStore("sidebar", "combinedMode", (x) => !x)
-        },
         width: createMemo(() => store.sidebar.width),
         resize(width: number) {
           setStore("sidebar", "width", width)
-        },
-        workspaces(directory: string) {
-          return () => store.sidebar.workspaces[directory] ?? store.sidebar.workspacesDefault ?? false
-        },
-        setWorkspaces(directory: string, value: boolean) {
-          setStore("sidebar", "workspaces", directory, value)
-        },
-        toggleWorkspaces(directory: string) {
-          const current = store.sidebar.workspaces[directory] ?? store.sidebar.workspacesDefault ?? false
-          setStore("sidebar", "workspaces", directory, !current)
         },
       },
       terminal: {

@@ -16,7 +16,7 @@ import { useNotification } from "@/context/notification"
 import { usePermission } from "@/context/permission"
 import { messageAgentColor } from "@/utils/agent"
 import { sessionIds, sessionMode, sessionQuery, sessionValue } from "@/utils/session-layout"
-import { isSessionPinned, toggleSessionPinned } from "@/utils/pinned-sessions"
+import { usePinnedSessions } from "@/utils/pinned-sessions"
 import { workspaceTitle } from "@/utils/workspace"
 import { sessionPermissionRequest } from "../session/composer/session-request-tree"
 import { hasProjectPermissions } from "./helpers"
@@ -87,7 +87,11 @@ export type SessionItemProps = {
   archiveSession: (session: Session) => Promise<void>
   deleteSession: (session: Session) => Promise<void>
   renameSession: (session: Session, next: string) => Promise<void>
-  InlineEditor: typeof import("../layout/inline-editor").createInlineEditorController extends (...args: any[]) => { InlineEditor: infer T } ? T : never
+  InlineEditor: typeof import("../layout/inline-editor").createInlineEditorController extends (...args: any[]) => {
+    InlineEditor: infer T
+  }
+    ? T
+    : never
 }
 
 const SessionRow = (props: {
@@ -110,7 +114,11 @@ const SessionRow = (props: {
   warmFocus: () => void
   cancelHoverPrefetch: () => void
   renameSession: (session: Session, next: string) => Promise<void>
-  InlineEditor: typeof import("../layout/inline-editor").createInlineEditorController extends (...args: any[]) => { InlineEditor: infer T } ? T : never
+  InlineEditor: typeof import("../layout/inline-editor").createInlineEditorController extends (...args: any[]) => {
+    InlineEditor: infer T
+  }
+    ? T
+    : never
 }): JSX.Element => {
   const layout = useLayout()
   const [searchParams] = useSearchParams<{ grid?: string; strip?: string }>()
@@ -118,83 +126,95 @@ const SessionRow = (props: {
   const navigate = useNavigate()
 
   return (
-  <A
-    href={`/${props.slug}/session/${props.session.id}`}
-    classList={{ active: props.isActive() }}
-    class={`flex items-center justify-between gap-3 min-w-0 text-left w-full focus:outline-none ${props.mobile ? "pr-[76px]" : ""} group-hover/session:pr-[76px] group-focus-within/session:pr-[76px] group-active/session:pr-[76px] ${props.dense ? "py-0.5" : "py-1"}`}
-    onPointerDown={props.warmPress}
-    onMouseEnter={props.warmHover}
-    onMouseLeave={props.cancelHoverPrefetch}
-    onFocus={props.warmFocus}
-    onClick={(e) => {
-      props.setHoverSession(undefined)
-      if (!props.sidebarOpened()) {
-        props.clearHoverProjectSoon()
-      }
-      
-      const mode = sessionMode(layout.sidebar)
-      if (mode) {
-        if (params.dir !== props.slug) return // Allow default navigation to new workspace
-        e.preventDefault()
-        const existing = sessionIds(mode, searchParams, params.id)
-        if (!existing.includes(props.session.id)) {
-          const next = [...existing, props.session.id].slice(-9)
-          navigate(`/${props.slug}/session/${params.id ?? props.session.id}${sessionQuery(mode, next.join(","))}`)
-          return
+    <A
+      href={`/${props.slug}/session/${props.session.id}`}
+      classList={{ active: props.isActive() }}
+      class={`flex items-center justify-between gap-3 min-w-0 text-left w-full focus:outline-none ${props.mobile ? "pr-[76px]" : ""} group-hover/session:pr-[76px] group-focus-within/session:pr-[76px] group-active/session:pr-[76px] ${props.dense ? "py-0.5" : "py-1"}`}
+      onPointerDown={props.warmPress}
+      onMouseEnter={props.warmHover}
+      onMouseLeave={props.cancelHoverPrefetch}
+      onFocus={props.warmFocus}
+      onClick={(e) => {
+        props.setHoverSession(undefined)
+        if (!props.sidebarOpened()) {
+          props.clearHoverProjectSoon()
         }
 
-        const next = existing.filter((x) => x !== props.session.id)
-        if (next.length <= 1) {
-          if (next.length === 1) {
-            navigate(`/${props.slug}/session/${next[0]}`)
+        const mode = sessionMode(layout.sidebar)
+        if (mode) {
+          if (params.dir !== props.slug) return // Allow default navigation to new workspace
+          e.preventDefault()
+          const existing = sessionIds(mode, searchParams, params.id)
+          if (!existing.includes(props.session.id)) {
+            const next = [...existing, props.session.id].slice(-9)
+            navigate(`/${props.slug}/session/${params.id ?? props.session.id}${sessionQuery(mode, next.join(","))}`)
             return
           }
-          navigate(`/${props.slug}/session`)
-          return
+
+          const next = existing.filter((x) => x !== props.session.id)
+          if (next.length <= 1) {
+            if (next.length === 1) {
+              navigate(`/${props.slug}/session/${next[0]}`)
+              return
+            }
+            navigate(`/${props.slug}/session`)
+            return
+          }
+          if (props.session.id === params.id) {
+            navigate(`/${props.slug}/session/${next[0]}${sessionQuery(mode, next.join(","))}`)
+            return
+          }
+          navigate(`/${props.slug}/session/${params.id ?? next[0]}${sessionQuery(mode, next.join(","))}`)
         }
-        if (props.session.id === params.id) {
-          navigate(`/${props.slug}/session/${next[0]}${sessionQuery(mode, next.join(","))}`)
-          return
-        }
-        navigate(`/${props.slug}/session/${params.id ?? next[0]}${sessionQuery(mode, next.join(","))}`)
-      }
-    }}
-  >
-    <div class="flex items-center gap-1.5 w-full">
-      <Show when={props.isWorking() || props.hasPermissions() || props.hasError() || props.unseenCount() > 0 || props.isPinned()}>
-        <div
-          class="shrink-0 size-6 flex items-center justify-center"
-          style={{ color: props.tint() ?? "var(--icon-interactive-base)" }}
+      }}
+    >
+      <div class="flex items-center gap-1.5 w-full">
+        <Show
+          when={
+            props.isWorking() ||
+            props.hasPermissions() ||
+            props.hasError() ||
+            props.unseenCount() > 0 ||
+            props.isPinned()
+          }
         >
-          <Switch fallback={<span />}>
-            <Match when={props.isWorking()}>
-              <Spinner class="size-[15px]" />
-            </Match>
-            <Match when={props.hasPermissions()}>
-              <div class="size-1.5 rounded-full bg-surface-warning-strong" />
-            </Match>
-            <Match when={props.hasError()}>
-              <div class="size-1.5 rounded-full bg-text-diff-delete-base" />
-            </Match>
-            <Match when={props.unseenCount() > 0}>
-              <div class="size-1.5 rounded-full bg-text-interactive-base" />
-            </Match>
-            <Match when={props.isPinned()}>
-              <Icon name="pin-filled" size="small" class="text-icon-weak opacity-80" />
-            </Match>
-          </Switch>
-        </div>
-      </Show>
-      <props.InlineEditor
-        id={`session:${props.session.id}`}
-        value={() => props.session.title}
-        onSave={(next) => props.renameSession(props.session, next)}
-        class={`text-13-regular grow-1 min-w-0 overflow-hidden text-ellipsis truncate ${props.isActive() ? "text-icon-brand-base font-medium" : "text-text-strong"}`}
-        displayClass={`text-13-regular grow-1 min-w-0 overflow-hidden text-ellipsis truncate ${props.isActive() ? "text-icon-brand-base font-medium" : "text-text-strong"}`}
-        openOnDblClick
-      />
-    </div>
-  </A>
+          <div
+            class="shrink-0 flex items-center justify-center"
+            classList={{
+              "w-4": props.isPinned() && !props.isWorking(),
+              "w-6": props.isWorking() || (!props.isPinned() && !props.isWorking()),
+            }}
+            style={{ color: props.tint() ?? "var(--icon-interactive-base)" }}
+          >
+            <Switch fallback={<span />}>
+              <Match when={props.isWorking()}>
+                <Spinner class="size-[15px]" />
+              </Match>
+              <Match when={props.hasPermissions()}>
+                <div class="size-1.5 rounded-full bg-surface-warning-strong" />
+              </Match>
+              <Match when={props.hasError()}>
+                <div class="size-1.5 rounded-full bg-text-diff-delete-base" />
+              </Match>
+              <Match when={props.unseenCount() > 0}>
+                <div class="size-1.5 rounded-full bg-text-interactive-base" />
+              </Match>
+              <Match when={props.isPinned()}>
+                <Icon name="pin-filled" size="small" class="text-icon-weak opacity-80" />
+              </Match>
+            </Switch>
+          </div>
+        </Show>
+        <props.InlineEditor
+          id={`session:${props.session.id}`}
+          value={() => props.session.title}
+          onSave={(next) => props.renameSession(props.session, next)}
+          class={`text-13-regular grow-1 min-w-0 overflow-hidden text-ellipsis truncate ${props.isActive() ? "text-icon-brand-base font-medium" : "text-text-strong"}`}
+          displayClass={`text-13-regular grow-1 min-w-0 overflow-hidden text-ellipsis truncate ${props.isActive() ? "text-icon-brand-base font-medium" : "text-text-strong"}`}
+          openOnDblClick
+        />
+      </div>
+    </A>
   )
 }
 
@@ -243,6 +263,7 @@ const SessionHoverPreview = (props: {
 )
 
 export const SessionItem = (props: SessionItemProps): JSX.Element => {
+  const { isPinned: checkPinned, togglePinned } = usePinnedSessions()
   const params = useParams()
   const navigate = useNavigate()
   const layout = useLayout()
@@ -280,7 +301,7 @@ export const SessionItem = (props: SessionItemProps): JSX.Element => {
     if (mode) return sessionIds(mode, searchParams, params.id).includes(props.session.id)
     return props.session.id === params.id
   })
-  const isPinned = createMemo(() => isSessionPinned(props.session.id))
+  const isPinned = createMemo(() => checkPinned(props.session.id))
 
   const warm = (span: number, priority: "high" | "low") => {
     const nav = props.navList?.()
@@ -356,10 +377,7 @@ export const SessionItem = (props: SessionItemProps): JSX.Element => {
       data-session-id={props.session.id}
       class={`group/session relative w-full rounded-md cursor-default pl-2 pr-3 transition-colors hover:bg-surface-raised-base-hover [&:has(:focus-visible)]:bg-surface-raised-base-hover has-[[data-expanded]]:bg-surface-raised-base-hover ${isActive() ? "bg-surface-raised-base-hover" : ""}`}
     >
-      <Show
-        when={hoverEnabled()}
-        fallback={item()}
-      >
+      <Show when={hoverEnabled()} fallback={item()}>
         <SessionHoverPreview
           mobile={props.mobile}
           nav={props.nav}
@@ -392,39 +410,39 @@ export const SessionItem = (props: SessionItemProps): JSX.Element => {
           "group-focus-within/session:opacity-100 group-focus-within/session:pointer-events-auto": true,
         }}
       >
-          <IconButton
-            icon={isPinned() ? "pin-filled" : "pin"}
-            variant="ghost"
-            class={`size-6 rounded-md ${isPinned() ? "text-icon-brand-base hover:text-icon-brand-strong" : ""}`}
-            aria-label={isPinned() ? language.t("common.unpin") || "Unpin" : language.t("common.pin") || "Pin"}
-            onClick={(event) => {
-              event.preventDefault()
-              event.stopPropagation()
-              toggleSessionPinned(props.session.id)
-            }}
-          />
-          <IconButton
-            icon="archive"
-            variant="ghost"
-            class="size-6 rounded-md"
-            aria-label={language.t("common.archive")}
-            onClick={(event) => {
-              event.preventDefault()
-              event.stopPropagation()
-              void props.archiveSession(props.session)
-            }}
-          />
-          <IconButton
-            icon="trash"
-            variant="ghost"
-            class="size-6 rounded-md text-text-diff-delete-base hover:text-text-diff-delete-strong"
-            aria-label={language.t("common.delete")}
-            onClick={(event) => {
-              event.preventDefault()
-              event.stopPropagation()
-              void props.deleteSession(props.session)
-            }}
-          />
+        <IconButton
+          icon={isPinned() ? "pin-filled" : "pin"}
+          variant="ghost"
+          class={`size-6 rounded-md ${isPinned() ? "text-icon-brand-base hover:text-icon-brand-strong" : ""}`}
+          aria-label={isPinned() ? language.t("common.unpin") || "Unpin" : language.t("common.pin") || "Pin"}
+          onClick={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+            togglePinned(props.session.id)
+          }}
+        />
+        <IconButton
+          icon="archive"
+          variant="ghost"
+          class="size-6 rounded-md"
+          aria-label={language.t("common.archive")}
+          onClick={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+            void props.archiveSession(props.session)
+          }}
+        />
+        <IconButton
+          icon="trash"
+          variant="ghost"
+          class="size-6 rounded-md text-text-diff-delete-base hover:text-text-diff-delete-strong"
+          aria-label={language.t("common.delete")}
+          onClick={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+            void props.deleteSession(props.session)
+          }}
+        />
       </div>
     </div>
   )
@@ -496,7 +514,7 @@ export const GridToggleItem = (props: {
   const layout = useLayout()
   const language = useLanguage()
   const active = createMemo(() => layout.sidebar.gridMode())
-  
+
   const label = "Grid Mode"
   const tooltip = () => props.mobile || !props.sidebarExpanded()
   const item = () => (
@@ -510,18 +528,24 @@ export const GridToggleItem = (props: {
         <div class="shrink-0 size-6 flex items-center justify-center">
           <Icon name="expand" size="small" class={active() ? "text-icon-brand-base" : "text-icon-weak"} />
         </div>
-        <span class={`text-13-regular grow-1 min-w-0 overflow-hidden text-ellipsis truncate ${active() ? "text-icon-brand-base font-medium" : "text-text-strong"}`}>
+        <span
+          class={`text-13-regular grow-1 min-w-0 overflow-hidden text-ellipsis truncate ${active() ? "text-icon-brand-base font-medium" : "text-text-strong"}`}
+        >
           {label}
         </span>
         <Show when={active()}>
-          <span class="text-[10px] uppercase font-bold text-icon-brand-base bg-surface-brand-base px-1.5 py-0.5 rounded-full mr-1">ON</span>
+          <span class="text-[10px] uppercase font-bold text-icon-brand-base bg-surface-brand-base px-1.5 py-0.5 rounded-full mr-1">
+            ON
+          </span>
         </Show>
       </div>
     </button>
   )
 
   return (
-    <div class={`group/session relative w-full rounded-md cursor-default transition-colors pl-2 pr-3 hover:bg-surface-raised-base-hover [&:has(:focus-visible)]:bg-surface-raised-base-hover ${active() ? "bg-surface-raised-base" : ""}`}>
+    <div
+      class={`group/session relative w-full rounded-md cursor-default transition-colors pl-2 pr-3 hover:bg-surface-raised-base-hover [&:has(:focus-visible)]:bg-surface-raised-base-hover ${active() ? "bg-surface-raised-base" : ""}`}
+    >
       <Show
         when={!tooltip()}
         fallback={

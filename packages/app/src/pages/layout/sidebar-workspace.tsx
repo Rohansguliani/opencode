@@ -1,7 +1,6 @@
 import { useNavigate, useParams, useSearchParams } from "@solidjs/router"
 import { createEffect, createMemo, For, Show, type Accessor, type JSX } from "solid-js"
 import { createStore } from "solid-js/store"
-import { createSortable } from "@thisbeyond/solid-dnd"
 import { createMediaQuery } from "@solid-primitives/media"
 import { base64Encode } from "@opencode-ai/util/encode"
 import { Button } from "@opencode-ai/ui/button"
@@ -45,6 +44,7 @@ export type WorkspaceSidebarContext = {
   archiveSession: (session: Session) => Promise<void>
   deleteSession: (session: Session) => Promise<void>
   renameSession: (session: Session, next: string) => Promise<void>
+  hydrateWorkspace: (directory: string, priority?: "high" | "low") => void
   workspaceName: (directory: string, projectId?: string, branch?: string) => string | undefined
   renameWorkspace: (directory: string, next: string, projectId?: string, branch?: string) => void
   editorOpen: (id: string) => boolean
@@ -58,33 +58,6 @@ export type WorkspaceSidebarContext = {
   showResetWorkspaceDialog: (root: string, directory: string) => void
   showDeleteWorkspaceDialog: (root: string, directory: string) => void
   setScrollContainerRef: (el: HTMLDivElement | undefined, mobile?: boolean) => void
-}
-
-export const WorkspaceDragOverlay = (props: {
-  sidebarProject: Accessor<LocalProject | undefined>
-  activeWorkspace: Accessor<string | undefined>
-  workspaceLabel: (directory: string, branch?: string, projectId?: string) => string
-}): JSX.Element => {
-  const globalSync = useGlobalSync()
-  const language = useLanguage()
-  const label = createMemo(() => {
-    const project = props.sidebarProject()
-    if (!project) return
-    const directory = props.activeWorkspace()
-    if (!directory) return
-
-    const [workspaceStore] = globalSync.child(directory, { bootstrap: false })
-    const kind =
-      directory === project.worktree ? language.t("workspace.type.local") : language.t("workspace.type.sandbox")
-    const name = props.workspaceLabel(directory, workspaceStore.vcs?.branch, project.id)
-    return `${kind} : ${name}`
-  })
-
-  return (
-    <Show when={label()}>
-      {(value) => <div class="bg-background-base rounded-md px-2 py-1 text-14-medium text-text-strong">{value()}</div>}
-    </Show>
-  )
 }
 
 const WorkspaceHeader = (props: {
@@ -149,7 +122,9 @@ const WorkspaceHeader = (props: {
         </Show>
       </div>
       <Show when={props.combined}>
-        <span class="text-12-regular text-text-weak min-w-0 truncate text-left w-full">{stripWorkspace(props.directory)}</span>
+        <span class="text-12-regular text-text-weak min-w-0 truncate text-left w-full">
+          {stripWorkspace(props.directory)}
+        </span>
       </Show>
     </div>
     <Show when={!props.combined}>
@@ -273,7 +248,7 @@ const WorkspaceActions = (props: {
   </div>
 )
 
-import { getPinnedSessions, isSessionPinned } from "@/utils/pinned-sessions"
+import { usePinnedSessions } from "@/utils/pinned-sessions"
 
 const WorkspaceSessionList = (props: {
   directory: string
@@ -290,12 +265,14 @@ const WorkspaceSessionList = (props: {
   language: ReturnType<typeof useLanguage>
   combined?: boolean
 }): JSX.Element => {
-  const pinnedSessions = createMemo(() => props.sessions().filter((s) => isSessionPinned(s.id)))
-  const unpinnedSessions = createMemo(() => props.sessions().filter((s) => !isSessionPinned(s.id)))
+  const { partition } = usePinnedSessions()
+  const partitions = createMemo(() => partition(props.sessions()))
+  const pinnedSessions = () => partitions()[0]
+  const unpinnedSessions = () => partitions()[1]
 
   return (
     <nav class="flex flex-col gap-0.5">
-      <Show when={props.showNew()}>
+      <Show when={props.showNew() && !props.combined}>
         <NewSessionItem
           slug={props.slug()}
           mobile={props.mobile}
@@ -307,11 +284,11 @@ const WorkspaceSessionList = (props: {
       <Show when={props.loading()}>
         <SessionSkeleton />
       </Show>
-      
+
       <Show when={pinnedSessions().length > 0}>
         <Show when={!props.combined}>
           <div class="px-2 py-1 mt-1 text-[11px] font-medium text-text-weak uppercase tracking-wider">
-            {props.language.t("common.pinned") || "PINNED_TEST"}
+            {props.language.t("common.pinned")}
           </div>
         </Show>
         <For each={pinnedSessions()}>
@@ -394,7 +371,7 @@ export const WorkspaceItem = (props: {
   ctx: WorkspaceSidebarContext
   directory: string
   project: LocalProject
-  sortNow: Accessor<number>
+
   mobile?: boolean
   popover?: boolean
   combined?: boolean
@@ -412,7 +389,7 @@ export const WorkspaceItem = (props: {
     pendingRename: false,
   })
   const slug = createMemo(() => base64Encode(props.directory))
-  const sessions = createMemo(() => sortedRootSessions(workspaceStore, props.sortNow()))
+  const sessions = createMemo(() => sortedRootSessions(workspaceStore))
   const children = createMemo(() => childMapByParent(workspaceStore.session))
   const local = createMemo(() => props.directory === props.project.worktree)
   const active = createMemo(() => props.ctx.currentDir() === props.directory)
@@ -461,13 +438,14 @@ export const WorkspaceItem = (props: {
 
   const openWrapper = (value: boolean) => {
     props.ctx.setWorkspaceExpanded(props.directory, value)
+    if (value) props.ctx.hydrateWorkspace(props.directory, "high")
     if (value) return
     if (props.ctx.editorOpen(`workspace:${props.directory}`)) props.ctx.closeEditor()
   }
 
   createEffect(() => {
     if (!boot()) return
-    globalSync.child(props.directory, { bootstrap: true })
+    props.ctx.hydrateWorkspace(props.directory, active() ? "high" : "low")
   })
 
   return (
@@ -556,81 +534,5 @@ export const WorkspaceItem = (props: {
         </div>
       </Collapsible.Content>
     </Collapsible>
-  )
-}
-
-export const SortableWorkspace = (props: {
-  ctx: WorkspaceSidebarContext
-  directory: string
-  project: LocalProject
-  sortNow: Accessor<number>
-  mobile?: boolean
-  popover?: boolean
-}): JSX.Element => {
-  const sortable = createSortable(props.directory)
-  const busy = createMemo(() => props.ctx.isBusy(props.directory))
-
-  return (
-    <div
-      // @ts-ignore
-      use:sortable
-      classList={{
-        "opacity-30": sortable.isActiveDraggable,
-        "opacity-50 pointer-events-none": busy(),
-      }}
-    >
-      <WorkspaceItem {...props} />
-    </div>
-  )
-}
-
-export const LocalWorkspace = (props: {
-  ctx: WorkspaceSidebarContext
-  project: LocalProject
-  sortNow: Accessor<number>
-  mobile?: boolean
-  popover?: boolean
-}): JSX.Element => {
-  const globalSync = useGlobalSync()
-  const language = useLanguage()
-  const workspace = createMemo(() => {
-    const [store, setStore] = globalSync.child(props.project.worktree)
-    return { store, setStore }
-  })
-  const slug = createMemo(() => base64Encode(props.project.worktree))
-  const sessions = createMemo(() => sortedRootSessions(workspace().store, props.sortNow()))
-  const children = createMemo(() => childMapByParent(workspace().store.session))
-  const booted = createMemo((prev) => prev || workspace().store.status === "complete", false)
-  const loading = createMemo(() => !booted() && sessions().length === 0)
-  const hasMore = createMemo(() => workspace().store.sessionTotal > sessions().length)
-  const loadMore = async () => {
-    const prev = sessions().length
-    workspace().setStore("limit", (limit) => (limit ?? 0) + ROOT_SESSION_PAGE_LIMIT)
-    await globalSync.project.loadSessions(props.project.worktree)
-    const next = sessions().length
-    if (next > prev) return
-    workspace().setStore("sessionTotal", next)
-  }
-
-  return (
-    <div
-      ref={(el) => props.ctx.setScrollContainerRef(el, props.mobile)}
-      class="size-full flex flex-col py-2 overflow-y-auto no-scrollbar [overflow-anchor:none]"
-    >
-      <WorkspaceSessionList
-        directory={props.project.worktree}
-        slug={slug}
-        mobile={props.mobile}
-        popover={props.popover}
-        ctx={props.ctx}
-        showNew={() => false}
-        loading={loading}
-        sessions={sessions}
-        children={children}
-        hasMore={hasMore}
-        loadMore={loadMore}
-        language={language}
-      />
-    </div>
   )
 }

@@ -6,12 +6,14 @@ import { Icon } from "@opencode-ai/ui/icon"
 import { Button } from "@opencode-ai/ui/button"
 import { Tooltip, TooltipKeybind } from "@opencode-ai/ui/tooltip"
 import { useTheme } from "@opencode-ai/ui/theme"
+import { useDialog } from "@opencode-ai/ui/context/dialog"
 
 import { useGlobalSync } from "@/context/global-sync"
 import { useLayout } from "@/context/layout"
 import { usePlatform } from "@/context/platform"
 import { useCommand } from "@/context/command"
 import { useLanguage } from "@/context/language"
+import { DialogSettings } from "@/components/dialog-settings"
 import { sortedRootSessions } from "@/pages/layout/helpers"
 import { decode64 } from "@/utils/base64"
 import { type SessionMode, sessionMode, sessionValue } from "@/utils/session-layout"
@@ -51,7 +53,9 @@ function ModeToggle(props: { active: boolean; label: string; toggle: () => void 
         aria-label={`Toggle ${props.label}`}
       >
         <div class="flex flex-col items-start justify-center gap-px pt-px pb-0.5 leading-none">
-          <For each={lines()}>{(line) => <span class="text-[11px] font-medium leading-none text-text-strong">{line}</span>}</For>
+          <For each={lines()}>
+            {(line) => <span class="text-[11px] font-medium leading-none text-text-strong">{line}</span>}
+          </For>
         </div>
         <span
           class={`relative flex h-6 w-11 items-center rounded-full border transition-all ${props.active ? "border-transparent bg-surface-brand-base" : "border-border-weak-base bg-surface-raised-base"}`}
@@ -69,6 +73,7 @@ export function Titlebar() {
   const layout = useLayout()
   const platform = usePlatform()
   const command = useCommand()
+  const dialog = useDialog()
   const language = useLanguage()
   const theme = useTheme()
   const sync = useGlobalSync()
@@ -96,19 +101,10 @@ export function Titlebar() {
     return sync.child(dir(), { bootstrap: false })[0]
   })
   const strip = createMemo(() => {
-    const ids = store()
-      ? sortedRootSessions(store()!, Date.now()).map((item) => item.id)
-      : []
+    const ids = store() ? sortedRootSessions(store()!).map((item) => item.id) : []
     if (params.id && !ids.includes(params.id)) ids.unshift(params.id)
     return [...new Set(ids)]
   })
-  const creating = createMemo(() => {
-    if (!params.dir) return false
-    if (params.id) return false
-    const parts = location.pathname.replace(/\/+$/, "").split("/")
-    return parts.at(-1) === "session"
-  })
-
   createEffect(() => {
     const current = path()
 
@@ -231,6 +227,9 @@ export function Titlebar() {
     void win.toggleMaximize().catch(() => undefined)
   }
 
+  const openSettings = () => dialog.show(() => <DialogSettings />)
+  const openHelp = () => platform.openLink("https://opencode.ai/desktop-feedback")
+
   return (
     <header
       class="h-10 shrink-0 bg-background-base relative grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center"
@@ -313,40 +312,39 @@ export function Titlebar() {
           </div>
           <ModeToggle active={layout.sidebar.gridMode()} label="Grid Mode" toggle={() => toggleMode("grid")} />
           <ModeToggle active={layout.sidebar.niriMode()} label="Niri Mode" toggle={() => toggleMode("niri")} />
-          <ModeToggle active={layout.sidebar.combinedMode()} label="Combined View" toggle={layout.sidebar.toggleCombinedMode} />
-          <Show when={params.dir}>
-            <TooltipKeybind
-              class="hidden xl:flex shrink-0"
-              placement="bottom"
-              title={language.t("command.session.new")}
-              keybind={command.keybind("session.new")}
-              openDelay={2000}
-            >
-              <Button
-                variant="ghost"
-                icon={creating() ? "new-session-active" : "new-session"}
-                class="titlebar-icon w-8 h-6 p-0 box-border"
-                onClick={() => {
-                  if (!params.dir) return
-                  const value = sessionValue(mode(), searchParams) ?? params.id
-                  if (value) {
-                    const key = layout.sidebar.gridMode() ? "grid" : "strip"
-                    navigate(`/${params.dir}/session?${key}=${value},`)
-                    return
-                  }
-                  navigate(`/${params.dir}/session`)
-                }}
-                aria-label={language.t("command.session.new")}
-                aria-current={creating() ? "page" : undefined}
-              />
-            </TooltipKeybind>
-          </Show>
+          <TooltipKeybind
+            class="hidden xl:flex shrink-0"
+            placement="bottom"
+            title={language.t("sidebar.settings")}
+            keybind={command.keybind("settings.open")}
+            openDelay={2000}
+          >
+            <Button
+              variant="ghost"
+              icon="settings-gear"
+              class="titlebar-icon w-8 h-6 p-0 box-border"
+              onClick={openSettings}
+              aria-label={language.t("sidebar.settings")}
+            />
+          </TooltipKeybind>
+          <Tooltip placement="bottom" value={language.t("sidebar.help")} openDelay={2000}>
+            <Button
+              variant="ghost"
+              icon="help"
+              class="hidden xl:flex titlebar-icon w-8 h-6 p-0 box-border"
+              onClick={openHelp}
+              aria-label={language.t("sidebar.help")}
+            />
+          </Tooltip>
         </div>
         <div id="opencode-titlebar-left" class="flex items-center gap-3 min-w-0 px-2" />
       </div>
 
       <div class="min-w-0 flex items-center justify-center pointer-events-none">
-        <div id="opencode-titlebar-center" class="pointer-events-auto flex items-center gap-2 min-w-0 flex justify-center w-fit max-w-full" />
+        <div
+          id="opencode-titlebar-center"
+          class="pointer-events-auto flex items-center gap-2 min-w-0 flex justify-center w-fit max-w-full"
+        />
       </div>
 
       <div

@@ -122,7 +122,9 @@ export function SessionStrip(props: { ids: string[] }) {
         <div
           class="grid h-full min-w-full gap-2 p-2"
           style={{
-            "grid-template-columns": ids().map((id) => `minmax(28rem, ${size(id)}fr)`).join(" "),
+            "grid-template-columns": ids()
+              .map((id) => `minmax(28rem, ${size(id)}fr)`)
+              .join(" "),
             "grid-template-rows": "minmax(0, 1fr)",
           }}
         >
@@ -159,7 +161,7 @@ export function SessionStrip(props: { ids: string[] }) {
                         <PromptProvider>
                           <CommentsProvider>
                             <Suspense fallback={<div class="size-full" />}>
-                              <Session />
+                              <Session active={id === active()} />
                             </Suspense>
                           </CommentsProvider>
                         </PromptProvider>
