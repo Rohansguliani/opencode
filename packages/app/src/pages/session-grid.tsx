@@ -16,16 +16,20 @@ export function SessionGrid(props: { ids: string[] }) {
   const [searchParams, setSearchParams] = useSearchParams()
   const params = useParams()
   const navigate = useNavigate()
-  
+
   let gridRef: HTMLDivElement | undefined
 
   const [dragId, setDragId] = createSignal<string | null>(null)
   const [localIds, setLocalIds] = createSignal<string[]>([])
   const [isCtrl, setIsCtrl] = createSignal(false)
-  
   const [colSizes, setColSizes] = createSignal<number[]>([1, 1, 1, 1, 1])
   const [rowSizes, setRowSizes] = createSignal<number[]>([1, 1, 1, 1, 1])
-  const [resizing, setResizing] = createSignal<{ type: "col" | "row", index: number, startFrs: number[], startPos: number } | null>(null)
+  const [resizing, setResizing] = createSignal<{
+    type: "col" | "row"
+    index: number
+    startFrs: number[]
+    startPos: number
+  } | null>(null)
 
   const stableIds = createMemo(() => {
     return [...props.ids].sort()
@@ -39,7 +43,7 @@ export function SessionGrid(props: { ids: string[] }) {
       if (e.key === "Control" || e.key === "Meta") setIsCtrl(false)
     }
     const handleBlur = () => setIsCtrl(false)
-    
+
     window.addEventListener("keydown", handleKeyDown)
     window.addEventListener("keyup", handleKeyUp)
     window.addEventListener("blur", handleBlur)
@@ -71,66 +75,72 @@ export function SessionGrid(props: { ids: string[] }) {
   })
 
   const gridTemplateColumns = createMemo(() => {
-    return colSizes().slice(0, gridDims().cols).map(s => `${s}fr`).join(" ")
+    return colSizes()
+      .slice(0, gridDims().cols)
+      .map((s) => `${s}fr`)
+      .join(" ")
   })
 
   const gridTemplateRows = createMemo(() => {
-    return rowSizes().slice(0, gridDims().rows).map(s => `${s}fr`).join(" ")
+    return rowSizes()
+      .slice(0, gridDims().rows)
+      .map((s) => `${s}fr`)
+      .join(" ")
   })
 
   const handlePointerMove = (e: PointerEvent) => {
     const res = resizing()
     if (!res || !gridRef) return
-    
+
     const rect = gridRef.getBoundingClientRect()
-    
+
     if (res.type === "col") {
       const deltaX = e.clientX - res.startPos
-      const totalFr = res.startFrs.slice(0, gridDims().cols).reduce((a,b)=>a+b, 0)
-      const trackWidth = rect.width - ((gridDims().cols - 1) * 8)
+      const totalFr = res.startFrs.slice(0, gridDims().cols).reduce((a, b) => a + b, 0)
+      const trackWidth = rect.width - (gridDims().cols - 1) * 8
       if (trackWidth <= 0) return
-      
+
       const deltaFr = (deltaX / trackWidth) * totalFr
-      
+
       const newSizes = [...colSizes()]
       let newLeft = res.startFrs[res.index] + deltaFr
       let newRight = res.startFrs[res.index + 1] - deltaFr
-      
+
       const minFr = totalFr * 0.1
       if (newLeft < minFr) {
-        newRight -= (minFr - newLeft)
+        newRight -= minFr - newLeft
         newLeft = minFr
       }
       if (newRight < minFr) {
-        newLeft -= (minFr - newRight)
+        newLeft -= minFr - newRight
         newRight = minFr
       }
-      
+
       newSizes[res.index] = newLeft
       newSizes[res.index + 1] = newRight
       setColSizes(newSizes)
     } else {
       const deltaY = e.clientY - res.startPos
-      const totalFr = res.startFrs.slice(0, gridDims().rows).reduce((a,b)=>a+b, 0)
-      const trackHeight = rect.height - ((gridDims().rows - 1) * 8)
+      const totalFr = res.startFrs.slice(0, gridDims().rows).reduce((a, b) => a + b, 0)
+      const trackHeight = rect.height - (gridDims().rows - 1) * 8
       if (trackHeight <= 0) return
-      
+
       const deltaFr = (deltaY / trackHeight) * totalFr
-      
+
       const newSizes = [...rowSizes()]
       let newTop = res.startFrs[res.index] + deltaFr
       let newBottom = res.startFrs[res.index + 1] - deltaFr
-      
+
       const minFr = totalFr * 0.1
       if (newTop < minFr) {
-        newBottom -= (minFr - newTop)
+        newBottom -= minFr - newTop
         newTop = minFr
       }
       if (newBottom < minFr) {
-        newTop -= (minFr - newBottom)
+        newTop -= minFr - newBottom
         newBottom = minFr
       }
-      
+
       newSizes[res.index] = newTop
       newSizes[res.index + 1] = newBottom
       setRowSizes(newSizes)
@@ -167,7 +177,7 @@ export function SessionGrid(props: { ids: string[] }) {
       type,
       index,
       startFrs: type === "col" ? [...colSizes()] : [...rowSizes()],
-      startPos: type === "col" ? e.clientX : e.clientY
+      startPos: type === "col" ? e.clientX : e.clientY,
     })
   }
 
@@ -178,7 +188,7 @@ export function SessionGrid(props: { ids: string[] }) {
   }
 
   const removeSessionFromGrid = (id: string) => {
-    const next = props.ids.filter(x => x !== id)
+    const next = props.ids.filter((x) => x !== id)
     if (next.length <= 1) {
       setSearchParams({ grid: undefined })
       if (next.length === 1) {
@@ -188,7 +198,9 @@ export function SessionGrid(props: { ids: string[] }) {
         navigate(`/${params.dir}/session`)
       }
     } else if (id === (params.id ?? "")) {
-      const url = next[0] ? `/${params.dir}/session/${next[0]}?grid=${next.join(",")}` : `/${params.dir}/session?grid=${next.join(",")}`
+      const url = next[0]
+        ? `/${params.dir}/session/${next[0]}?grid=${next.join(",")}`
+        : `/${params.dir}/session?grid=${next.join(",")}`
       navigate(url)
     } else {
       setSearchParams({ grid: next.join(",") })
@@ -206,13 +218,13 @@ export function SessionGrid(props: { ids: string[] }) {
 
       const targetEl = e.currentTarget as HTMLElement
       const rect = targetEl.getBoundingClientRect()
-      
+
       const targetCenterX = rect.left + rect.width / 2
       const targetCenterY = rect.top + rect.height / 2
-      
+
       const dx = Math.abs(e.clientX - targetCenterX)
       const dy = Math.abs(e.clientY - targetCenterY)
-      
+
       if (dx > rect.width * 0.4 || dy > rect.height * 0.4) {
         return prev
       }
@@ -220,17 +232,17 @@ export function SessionGrid(props: { ids: string[] }) {
       const next = [...prev]
       const [item] = next.splice(from, 1)
       next.splice(to, 0, item)
-      
+
       if (!gridRef) return next
 
       const children = Array.from(gridRef.children) as HTMLElement[]
       const oldPositions = new Map<HTMLElement, DOMRect>()
-      
+
       for (const child of children) {
         if (!child.style) continue
         oldPositions.set(child, child.getBoundingClientRect())
-        child.style.transition = 'none'
-        child.style.transform = ''
+        child.style.transition = "none"
+        child.style.transform = ""
       }
 
       queueMicrotask(() => {
@@ -238,25 +250,25 @@ export function SessionGrid(props: { ids: string[] }) {
           if (!child.style) continue
           const oldRect = oldPositions.get(child)
           if (!oldRect) continue
-          
+
           const newRect = child.getBoundingClientRect()
           const deltaX = oldRect.left - newRect.left
           const deltaY = oldRect.top - newRect.top
-          
+
           if (deltaX === 0 && deltaY === 0) continue
-          
-          child.style.transition = 'none'
+
+          child.style.transition = "none"
           child.style.transform = `translate(${deltaX}px, ${deltaY}px)`
-          
+
           void child.getBoundingClientRect()
-          
-          child.style.transition = 'transform 200ms cubic-bezier(0.2, 0, 0, 1)'
-          child.style.transform = ''
-          
+
+          child.style.transition = "transform 200ms cubic-bezier(0.2, 0, 0, 1)"
+          child.style.transform = ""
+
           const timerId = setTimeout(() => {
             if ((child as any).__flipTimer === timerId) {
-              child.style.transition = ''
-              child.style.transform = ''
+              child.style.transition = ""
+              child.style.transform = ""
             }
           }, 200)
           ;(child as any).__flipTimer = timerId
@@ -270,10 +282,10 @@ export function SessionGrid(props: { ids: string[] }) {
   const commitDrag = () => {
     const dragging = dragId()
     if (!dragging) return
-    
+
     const currentLocal = [...localIds()]
     setDragId(null)
-    
+
     if (currentLocal.join(",") !== props.ids.join(",")) {
       const activeId = params.id ?? ""
       const newFocusedId = currentLocal.find((id) => id === activeId) ?? currentLocal[0]
@@ -286,18 +298,17 @@ export function SessionGrid(props: { ids: string[] }) {
 
   return (
     <div class="relative w-full h-full p-2 bg-background-base">
-      <div 
+      <div
         ref={gridRef}
-        class="grid gap-2 w-full h-full" 
-        style={{ 
-          "grid-template-columns": gridTemplateColumns(), 
-          "grid-template-rows": gridTemplateRows() 
+        class="grid gap-2 w-full h-full"
+        style={{
+          "grid-template-columns": gridTemplateColumns(),
+          "grid-template-rows": gridTemplateRows(),
         }}
       >
         <For each={stableIds()}>
           {(id) => {
             const visualIndex = () => localIds().indexOf(id)
-            const isFocused = () => id === (params.id ?? "")
 
             return (
               <div
@@ -305,7 +316,7 @@ export function SessionGrid(props: { ids: string[] }) {
                 style={{ order: visualIndex() }}
                 class={`relative flex flex-col min-h-0 min-w-0 border rounded-lg overflow-hidden shadow-sm transition-all duration-200 ease-in-out select-none
                   ${isCtrl() ? "cursor-grab" : ""}
-                  ${isFocused() ? "ring-2 ring-blue-500 z-10" : "border-border-base hover:border-border-strong"}
+                  border-border-base
                   ${dragId() === id ? "opacity-50 scale-[0.98] z-50 shadow-xl" : ""}
                   ${count() === 5 && visualIndex() === 4 ? "col-start-3 row-start-1 row-span-2" : ""}
                 `}
@@ -330,11 +341,18 @@ export function SessionGrid(props: { ids: string[] }) {
                 onDragEnd={() => {
                   commitDrag()
                 }}
-                onClick={(e) => {
-                  if (!isFocused()) focusSession(id)
+                onClick={() => {
+                  if ((params.id ?? "") !== id) focusSession(id)
                 }}
                 onMouseEnter={(e) => {
-                  if (!isFocused() && !dragId()) focusSession(id, true)
+                  if (!dragId() && (params.id ?? "") !== id) {
+                    ;(e.currentTarget as any)._hoverTimer = setTimeout(() => {
+                      focusSession(id, true)
+                    }, 150)
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  clearTimeout((e.currentTarget as any)._hoverTimer)
                 }}
               >
                 <Show when={dragId() !== null}>
@@ -361,7 +379,7 @@ export function SessionGrid(props: { ids: string[] }) {
                         <PromptProvider>
                           <CommentsProvider>
                             <Suspense fallback={<div class="size-full" />}>
-                              <Session />
+                              <Session active={(params.id ?? "") === id} />
                             </Suspense>
                           </CommentsProvider>
                         </PromptProvider>
@@ -375,11 +393,11 @@ export function SessionGrid(props: { ids: string[] }) {
         </For>
       </div>
 
-      <div 
-        class="absolute inset-2 pointer-events-none grid gap-2" 
-        style={{ 
-          "grid-template-columns": gridTemplateColumns(), 
-          "grid-template-rows": gridTemplateRows() 
+      <div
+        class="absolute inset-2 pointer-events-none grid gap-2"
+        style={{
+          "grid-template-columns": gridTemplateColumns(),
+          "grid-template-rows": gridTemplateRows(),
         }}
       >
         <For each={Array.from({ length: gridDims().cols - 1 })}>
@@ -390,7 +408,7 @@ export function SessionGrid(props: { ids: string[] }) {
                 "grid-column": i() + 1,
                 "grid-row": "1 / -1",
                 "justify-self": "end",
-                "width": "16px",
+                width: "16px",
                 "margin-right": "-12px",
               }}
               onPointerDown={(e) => startResize(e, "col", i())}
@@ -407,7 +425,7 @@ export function SessionGrid(props: { ids: string[] }) {
                 "grid-row": i() + 1,
                 "grid-column": "1 / -1",
                 "align-self": "end",
-                "height": "16px",
+                height: "16px",
                 "margin-bottom": "-12px",
               }}
               onPointerDown={(e) => startResize(e, "row", i())}

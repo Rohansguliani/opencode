@@ -9,8 +9,8 @@ import {
   createMemo,
   createEffect,
   createComputed,
-  on,
   onMount,
+  on,
   untrack,
   createSignal,
 } from "solid-js"
@@ -300,7 +300,7 @@ function createSessionHistoryWindow(input: SessionHistoryWindowInput) {
   }
 }
 
-export default function Page() {
+export default function Page(props: { active?: boolean }) {
   const globalSync = useGlobalSync()
   const layout = useLayout()
   const local = useLocal()
@@ -316,8 +316,16 @@ export default function Page() {
   const terminal = useTerminal()
   const [searchParams, setSearchParams] = useSearchParams<{ prompt?: string }>()
   const { params, sessionKey, tabs, view } = useSessionLayout()
+  const active = createMemo(() => props.active ?? true)
+
+  const [mounted, setMounted] = createSignal(false)
+  onMount(() => {
+    setTimeout(() => setMounted(true), 150)
+  })
+  const heavyActive = createMemo(() => mounted())
 
   createEffect(() => {
+    if (!active()) return
     if (!untrack(() => prompt.ready())) return
     prompt.ready()
     untrack(() => {
@@ -469,6 +477,7 @@ export default function Page() {
   const lastUserMessage = createMemo(() => visibleUserMessages().at(-1))
 
   createEffect(() => {
+    if (!active()) return
     const tab = activeFileTab()
     if (!tab) return
 
@@ -556,6 +565,22 @@ export default function Page() {
     const project = sync.project
     if (project && sdk.directory !== project.worktree) return sdk.directory
     return "main"
+  })
+
+  const ghost = createMemo(() => {
+    const text = prompt
+      .current()
+      .map((part) => {
+        if (part.type === "text") return part.content
+        if (part.type === "file") return `[${part.path}]`
+        if (part.type === "agent") return `@${part.name}`
+        return `[${part.filename}]`
+      })
+      .join("")
+      .trim()
+
+    if (text) return text
+    return language.t("prompt.placeholder.simple")
   })
 
   const setActiveMessage = (message: UserMessage | undefined) => {
@@ -908,6 +933,7 @@ export default function Page() {
     navigateMessageByOffset,
     setActiveMessage,
     focusInput,
+    enabled: active,
     review: reviewTab,
   })
 
@@ -1026,8 +1052,9 @@ export default function Page() {
   createEffect(
     on(
       activeFileTab,
-      (active) => {
-        if (!active) return
+      (tab) => {
+        if (!active()) return
+        if (!tab) return
         if (fileTreeTab() !== "changes") return
         showAllFiles()
       },
@@ -1076,6 +1103,7 @@ export default function Page() {
   }
 
   createEffect(() => {
+    if (!active()) return
     const pending = tree.pendingDiff
     if (!pending) return
     if (!tree.reviewScroll) return
@@ -1117,6 +1145,7 @@ export default function Page() {
   })
 
   createEffect(() => {
+    if (!active()) return
     const id = params.id
     if (!id) return
 
@@ -1140,6 +1169,7 @@ export default function Page() {
             : store.mobileTab === "changes",
         ] as const,
       ([key, wants]) => {
+        if (!active()) return
         if (diffFrame !== undefined) cancelAnimationFrame(diffFrame)
         if (diffTimer !== undefined) window.clearTimeout(diffTimer)
         diffFrame = undefined
@@ -1165,6 +1195,7 @@ export default function Page() {
 
   let treeDir: string | undefined
   createEffect(() => {
+    if (!active()) return
     const dir = sdk.directory
     if (!isDesktop()) return
     if (!layout.fileTree.opened()) return
@@ -1180,6 +1211,7 @@ export default function Page() {
     on(
       () => sdk.directory,
       () => {
+        if (!active()) return
         void file.tree.list("")
 
         const tab = activeFileTab()
@@ -1193,7 +1225,7 @@ export default function Page() {
   )
 
   const autoScroll = createAutoScroll({
-    working: () => true,
+    working: active,
     overflowAnchor: "dynamic",
   })
 
@@ -1637,12 +1669,15 @@ export default function Page() {
     consumePendingMessage: layout.pendingMessage.consume,
   })
 
-  onMount(() => {
+  createEffect(() => {
+    if (!active()) return
     document.addEventListener("keydown", handleKeyDown)
+    onCleanup(() => {
+      document.removeEventListener("keydown", handleKeyDown)
+    })
   })
 
   onCleanup(() => {
-    document.removeEventListener("keydown", handleKeyDown)
     if (reviewFrame !== undefined) cancelAnimationFrame(reviewFrame)
     if (refreshFrame !== undefined) cancelAnimationFrame(refreshFrame)
     if (refreshTimer !== undefined) window.clearTimeout(refreshTimer)
@@ -1661,32 +1696,32 @@ export default function Page() {
   const adjacentSessions = createMemo(() => {
     if (!params.id) return { prev: null, next: null }
     const [workspaceStore] = globalSync.child(sdk.directory, { bootstrap: false })
-    const sessions = sortedRootSessions(workspaceStore, Date.now())
+    const sessions = sortedRootSessions(workspaceStore)
     const idx = sessions.findIndex((s) => s.id === params.id)
     if (idx === -1) return { prev: null, next: null }
     return {
       prev: idx > 0 ? sessions[idx - 1] : null,
-      next: idx < sessions.length - 1 ? sessions[idx + 1] : null
+      next: idx < sessions.length - 1 ? sessions[idx + 1] : null,
     }
   })
 
   const onTouchStart = (e: TouchEvent) => {
     if (isDesktop() || !params.id) return
     if (e.touches.length !== 1) return
-    
+
     let target = e.target as HTMLElement | null
     let canScrollHorizontally = false
     while (target && target !== e.currentTarget) {
       if (target.scrollWidth > target.clientWidth) {
-         const overflowX = window.getComputedStyle(target).overflowX
-         if (overflowX === "auto" || overflowX === "scroll") {
-           canScrollHorizontally = true
-           break
-         }
+        const overflowX = window.getComputedStyle(target).overflowX
+        if (overflowX === "auto" || overflowX === "scroll") {
+          canScrollHorizontally = true
+          break
+        }
       }
       target = target.parentElement
     }
-    
+
     if (canScrollHorizontally) return
 
     touchStartX = e.touches[0].clientX
@@ -1698,7 +1733,7 @@ export default function Page() {
 
   const onTouchMove = (e: TouchEvent) => {
     if (!swipeActive()) return
-    
+
     const currentX = e.touches[0].clientX
     const currentY = e.touches[0].clientY
     const deltaX = currentX - touchStartX
@@ -1729,28 +1764,28 @@ export default function Page() {
   const onTouchEnd = (e: TouchEvent) => {
     if (!swipeActive()) return
     setSwipeActive(false)
-    
+
     const deltaX = swipeOffset()
     const threshold = window.innerWidth * 0.25
 
     if (Math.abs(deltaX) > threshold) {
-       const [workspaceStore] = globalSync.child(sdk.directory, { bootstrap: false })
-       const sessions = sortedRootSessions(workspaceStore, Date.now())
-       const idx = sessions.findIndex((s) => s.id === params.id)
-       
-       if (idx !== -1) {
-         const offset = deltaX > 0 ? -1 : 1
-         const nextIdx = idx + offset
-         if (nextIdx >= 0 && nextIdx < sessions.length) {
-           const nextSession = sessions[nextIdx]
-           const dir = base64Encode(sdk.directory)
-           navigate(`/${dir}/session/${nextSession.id}`)
-           setSwipeOffset(0)
-           return
-         }
-       }
+      const [workspaceStore] = globalSync.child(sdk.directory, { bootstrap: false })
+      const sessions = sortedRootSessions(workspaceStore)
+      const idx = sessions.findIndex((s) => s.id === params.id)
+
+      if (idx !== -1) {
+        const offset = deltaX > 0 ? -1 : 1
+        const nextIdx = idx + offset
+        if (nextIdx >= 0 && nextIdx < sessions.length) {
+          const nextSession = sessions[nextIdx]
+          const dir = base64Encode(sdk.directory)
+          navigate(`/${dir}/session/${nextSession.id}`)
+          setSwipeOffset(0)
+          return
+        }
+      }
     }
-    
+
     setSwipeOffset(0)
   }
 
@@ -1772,12 +1807,12 @@ export default function Page() {
           </div>
         </div>
       </Show>
-      
-      <div 
+
+      <div
         class="relative size-full flex flex-col bg-background-base z-10"
         style={{
           transform: `translateX(${swipeOffset()}px)`,
-          transition: swipeActive() ? 'none' : 'transform 0.3s cubic-bezier(0.25, 1, 0.5, 1)'
+          transition: swipeActive() ? "none" : "transform 0.3s cubic-bezier(0.25, 1, 0.5, 1)",
         }}
       >
         <SessionHeader />
@@ -1807,145 +1842,167 @@ export default function Page() {
             </Tabs>
           </Show>
 
-        {/* Session panel */}
-        <div
-          classList={{
-            "@container relative shrink-0 flex flex-col min-h-0 h-full bg-background-stronger flex-1 md:flex-none": true,
-            "transition-[width] duration-[240ms] ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[width] motion-reduce:transition-none":
-              !size.active() && !ui.reviewSnap,
-          }}
-          style={{
-            width: sessionPanelWidth(),
-          }}
-        >
-          <div class="flex-1 min-h-0 overflow-hidden">
-            <Switch>
-              <Match when={params.id}>
-                <Show when={lastUserMessage()}>
-                  <MessageTimeline
-                    mobileChanges={mobileChanges()}
-                    mobileFallback={reviewContent({
-                      diffStyle: "unified",
-                      classes: {
-                        root: "pb-8",
-                        header: "px-4",
-                        container: "px-4",
-                      },
-                      loadingClass: "px-4 py-4 text-text-weak",
-                      emptyClass: "h-full pb-64 -mt-4 flex flex-col items-center justify-center text-center gap-6",
-                    })}
-                    actions={actions}
-                    scroll={ui.scroll}
-                    onResumeScroll={resumeScroll}
-                    setScrollRef={setScrollRef}
-                    onScheduleScrollState={scheduleScrollState}
-                    onAutoScrollHandleScroll={autoScroll.handleScroll}
-                    onMarkScrollGesture={markScrollGesture}
-                    hasScrollGesture={hasScrollGesture}
-                    onUserScroll={markUserScroll}
-                    onTurnBackfillScroll={historyWindow.onScrollerScroll}
-                    onAutoScrollInteraction={autoScroll.handleInteraction}
-                    centered={centered()}
-                    setContentRef={(el) => {
-                      content = el
-                      autoScroll.contentRef(el)
+          {/* Session panel */}
+          <div
+            classList={{
+              "@container relative shrink-0 flex flex-col min-h-0 h-full bg-background-stronger flex-1 md:flex-none": true,
+              "transition-[width] duration-[240ms] ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[width] motion-reduce:transition-none":
+                !size.active() && !ui.reviewSnap,
+            }}
+            style={{
+              width: sessionPanelWidth(),
+            }}
+          >
+            <div class="flex-1 min-h-0 overflow-hidden">
+              <Switch>
+                <Match when={params.id}>
+                  <Show when={lastUserMessage()}>
+                    <MessageTimeline
+                      mobileChanges={mobileChanges()}
+                      mobileFallback={reviewContent({
+                        diffStyle: "unified",
+                        classes: {
+                          root: "pb-8",
+                          header: "px-4",
+                          container: "px-4",
+                        },
+                        loadingClass: "px-4 py-4 text-text-weak",
+                        emptyClass: "h-full pb-64 -mt-4 flex flex-col items-center justify-center text-center gap-6",
+                      })}
+                      actions={actions}
+                      scroll={ui.scroll}
+                      onResumeScroll={resumeScroll}
+                      setScrollRef={setScrollRef}
+                      onScheduleScrollState={scheduleScrollState}
+                      onAutoScrollHandleScroll={autoScroll.handleScroll}
+                      onMarkScrollGesture={markScrollGesture}
+                      hasScrollGesture={hasScrollGesture}
+                      onUserScroll={markUserScroll}
+                      onTurnBackfillScroll={historyWindow.onScrollerScroll}
+                      onAutoScrollInteraction={autoScroll.handleInteraction}
+                      centered={centered()}
+                      setContentRef={(el) => {
+                        content = el
+                        autoScroll.contentRef(el)
 
-                      const root = scroller
-                      if (root) scheduleScrollState(root)
+                        const root = scroller
+                        if (root) scheduleScrollState(root)
+                      }}
+                      turnStart={historyWindow.turnStart()}
+                      historyMore={historyMore()}
+                      historyLoading={historyLoading()}
+                      onLoadEarlier={() => {
+                        void historyWindow.loadAndReveal()
+                      }}
+                      renderedUserMessages={historyWindow.renderedUserMessages()}
+                      anchor={anchor}
+                    />
+                  </Show>
+                </Match>
+                <Match when={true}>
+                  <NewSessionView worktree={newSessionWorktree()} />
+                </Match>
+              </Switch>
+            </div>
+
+            <Show
+              when={heavyActive()}
+              fallback={
+                <div class="shrink-0 w-full pb-3 flex flex-col justify-center items-center bg-background-stronger">
+                  <div
+                    classList={{
+                      "w-full px-3": true,
+                      "md:max-w-200 md:mx-auto 2xl:max-w-[1000px]": centered(),
                     }}
-                    turnStart={historyWindow.turnStart()}
-                    historyMore={historyMore()}
-                    historyLoading={historyLoading()}
-                    onLoadEarlier={() => {
-                      void historyWindow.loadAndReveal()
-                    }}
-                    renderedUserMessages={historyWindow.renderedUserMessages()}
-                    anchor={anchor}
-                  />
-                </Show>
-              </Match>
-              <Match when={true}>
-                <NewSessionView worktree={newSessionWorktree()} />
-              </Match>
-            </Switch>
-          </div>
-
-          <SessionComposerRegion
-            state={composer}
-            ready={!store.deferRender && messagesReady()}
-            centered={centered()}
-            inputRef={(el) => {
-              inputRef = el
-            }}
-            newSessionWorktree={newSessionWorktree()}
-            onNewSessionWorktreeReset={() => setStore("newSessionWorktree", "main")}
-            onSubmit={() => {
-              comments.clear()
-              resumeScroll()
-            }}
-            onResponseSubmit={resumeScroll}
-            followup={
-              params.id
-                ? {
-                    queue: queueEnabled,
-                    items: followupDock(),
-                    sending: sendingFollowup(),
-                    edit: editingFollowup(),
-                    onQueue: queueFollowup,
-                    onAbort: () => {
-                      const id = params.id
-                      if (!id) return
-                      setFollowup("paused", id, true)
-                    },
-                    onSend: (id) => {
-                      void sendFollowup(params.id!, id, { manual: true })
-                    },
-                    onEdit: editFollowup,
-                    onEditLoaded: clearFollowupEdit,
-                  }
-                : undefined
-            }
-            revert={
-              rolled().length > 0
-                ? {
-                    items: rolled(),
-                    restoring: ui.restoring,
-                    disabled: ui.reverting,
-                    onRestore: restore,
-                  }
-                : undefined
-            }
-            setPromptDockRef={(el) => {
-              promptDock = el
-            }}
-          />
-
-          <Show when={desktopReviewOpen()}>
-            <div onPointerDown={() => size.start()}>
-              <ResizeHandle
-                direction="horizontal"
-                size={layout.session.width()}
-                min={450}
-                max={typeof window === "undefined" ? 1000 : window.innerWidth * 0.45}
-                onResize={(width) => {
-                  size.touch()
-                  layout.session.resize(width)
+                  >
+                    <div class="w-full min-h-[84px] rounded-md border border-border-weak-base bg-background-base/70 px-4 py-3 text-text-weak whitespace-pre-wrap break-words overflow-hidden">
+                      {ghost()}
+                    </div>
+                  </div>
+                </div>
+              }
+            >
+              <SessionComposerRegion
+                state={composer}
+                ready={!store.deferRender && messagesReady()}
+                centered={centered()}
+                inputRef={(el) => {
+                  inputRef = el
+                }}
+                newSessionWorktree={newSessionWorktree()}
+                onNewSessionWorktreeReset={() => setStore("newSessionWorktree", "main")}
+                onSubmit={() => {
+                  comments.clear()
+                  resumeScroll()
+                }}
+                onResponseSubmit={resumeScroll}
+                followup={
+                  params.id
+                    ? {
+                        queue: queueEnabled,
+                        items: followupDock(),
+                        sending: sendingFollowup(),
+                        edit: editingFollowup(),
+                        onQueue: queueFollowup,
+                        onAbort: () => {
+                          const id = params.id
+                          if (!id) return
+                          setFollowup("paused", id, true)
+                        },
+                        onSend: (id) => {
+                          void sendFollowup(params.id!, id, { manual: true })
+                        },
+                        onEdit: editFollowup,
+                        onEditLoaded: clearFollowupEdit,
+                      }
+                    : undefined
+                }
+                revert={
+                  rolled().length > 0
+                    ? {
+                        items: rolled(),
+                        restoring: ui.restoring,
+                        disabled: ui.reverting,
+                        onRestore: restore,
+                      }
+                    : undefined
+                }
+                setPromptDockRef={(el) => {
+                  promptDock = el
                 }}
               />
-            </div>
+            </Show>
+
+            <Show when={desktopReviewOpen()}>
+              <div onPointerDown={() => size.start()}>
+                <ResizeHandle
+                  direction="horizontal"
+                  size={layout.session.width()}
+                  min={450}
+                  max={typeof window === "undefined" ? 1000 : window.innerWidth * 0.45}
+                  onResize={(width) => {
+                    size.touch()
+                    layout.session.resize(width)
+                  }}
+                />
+              </div>
+            </Show>
+          </div>
+
+          <Show when={heavyActive()}>
+            <SessionSidePanel
+              reviewPanel={reviewPanel}
+              activeDiff={tree.activeDiff}
+              focusReviewDiff={focusReviewDiff}
+              reviewSnap={ui.reviewSnap}
+              size={size}
+            />
           </Show>
         </div>
 
-        <SessionSidePanel
-          reviewPanel={reviewPanel}
-          activeDiff={tree.activeDiff}
-          focusReviewDiff={focusReviewDiff}
-          reviewSnap={ui.reviewSnap}
-          size={size}
-        />
-      </div>
-
-      <TerminalPanel />
+        <Show when={heavyActive()}>
+          <TerminalPanel />
+        </Show>
       </div>
     </div>
   )
