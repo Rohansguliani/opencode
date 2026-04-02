@@ -170,6 +170,16 @@ function setOptimisticAdd(setStore: (...args: unknown[]) => void, input: Optimis
     const result = Binary.search(messages, input.message.id, (m) => m.id)
     const next = [...messages]
     next.splice(result.index, 0, input.message)
+    
+    // Auto-update localStorage with latest optimistic/streamed snapshot
+    setTimeout(() => {
+      try {
+        const recentMessages = next.slice(-20)
+        // Note: optimistic inputs don't have full parts arrays yet usually, but we capture what we can
+        localStorage.setItem(`opencode.recent.${input.sessionID}`, JSON.stringify({ message: recentMessages, part: [] }))
+      } catch {}
+    }, 100)
+    
     return next
   })
   setStore("part", input.message.id, sortParts(input.parts))
@@ -388,6 +398,18 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
               cursor: next.cursor,
               complete: next.complete,
             })
+            if (input.mode !== "prepend") {
+              setTimeout(() => {
+                try {
+                  const recentMessages = message.slice(-20)
+                  const recentParts = next.part.filter((p) => recentMessages.some((m) => m.id === p.id))
+                  localStorage.setItem(
+                    `opencode.recent.${input.sessionID}`,
+                    JSON.stringify({ message: recentMessages, part: recentParts }),
+                  )
+                } catch {}
+              }, 100)
+            }
           })
         })
         .finally(() => {
@@ -482,6 +504,25 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
           const client = sdk.client
           const [store, setStore] = globalSync.child(directory)
           const key = keyFor(directory, sessionID)
+
+          if (store.message[sessionID] === undefined) {
+            try {
+              const cachedStr = localStorage.getItem(`opencode.recent.${sessionID}`)
+              if (cachedStr) {
+                const parsed = JSON.parse(cachedStr)
+                if (Array.isArray(parsed.message)) {
+                  batch(() => {
+                    setStore("message", sessionID, parsed.message)
+                    if (Array.isArray(parsed.part)) {
+                      for (const p of parsed.part) {
+                        setStore("part", p.id, p.part)
+                      }
+                    }
+                  })
+                }
+              }
+            } catch {}
+          }
 
           touch(directory, setStore, sessionID)
 
