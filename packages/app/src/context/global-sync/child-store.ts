@@ -28,6 +28,7 @@ export function createChildStoreManager(input: {
   const vcsCache = new Map<string, VcsCache>()
   const metaCache = new Map<string, MetaCache>()
   const iconCache = new Map<string, IconCache>()
+  const sessionListCache = new Map<string, import("./types").SessionListCache>()
   const lifecycle = new Map<string, DirState>()
   const pins = new Map<string, number>()
   const ownerPins = new WeakMap<object, Set<string>>()
@@ -153,21 +154,31 @@ export function createChildStoreManager(input: {
       if (!icon) throw new Error(input.translate("error.childStore.persistedProjectIconCreateFailed"))
       iconCache.set(directory, { store: icon[0], setStore: icon[1], ready: icon[3] })
 
+      const sessionList = runWithOwner(input.owner, () =>
+        persisted(
+          Persist.workspace(directory, "sidebar_sessions", ["sidebar_sessions.v1"]),
+          createStore({ value: [] as import("@opencode-ai/sdk/v2/client").Session[] }),
+        ),
+      )
+      if (!sessionList) throw new Error("Failed to create sessionList persisted cache")
+      sessionListCache.set(directory, { store: sessionList[0], setStore: sessionList[1], ready: sessionList[3] })
+
       const init = () =>
         createRoot((dispose) => {
           const initialMeta = meta[0].value
           const initialIcon = icon[0].value
+          const initialSessions = sessionList[0].value
           const child = createStore<State>({
             project: "",
             projectMeta: initialMeta,
             icon: initialIcon,
             provider: { all: [], connected: [], default: {} },
             config: {},
-            path: { state: "", config: "", worktree: "", directory: "", home: "" },
+            path: { state: "", config: "", worktree: "", directory, home: "" },
             status: "loading" as const,
             agent: [],
             command: [],
-            session: [],
+            session: initialSessions,
             sessionTotal: 0,
             session_status: {},
             session_diff: {},
@@ -206,6 +217,11 @@ export function createChildStoreManager(input: {
           onPersistedInit(icon[2], () => {
             if (child[0].icon !== initialIcon) return
             child[1]("icon", icon[0].value)
+          })
+
+          onPersistedInit(sessionList[2], () => {
+            if (child[0].session !== initialSessions) return
+            child[1]("session", sessionList[0].value)
           })
         })
 
@@ -268,5 +284,6 @@ export function createChildStoreManager(input: {
     vcsCache,
     metaCache,
     iconCache,
+    sessionListCache,
   }
 }

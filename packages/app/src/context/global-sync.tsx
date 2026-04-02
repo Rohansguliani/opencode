@@ -224,6 +224,12 @@ function createGlobalSync() {
           }),
         )
         setStore("session", reconcile(sessions, { key: "id" }))
+        
+        const cachedSessionList = children.sessionListCache.get(directory)
+        if (cachedSessionList) {
+          cachedSessionList.setStore("value", sessions.slice(0, SESSION_RECENT_LIMIT))
+        }
+
         cleanupDroppedSessionCaches(store, setStore, sessions, setSessionTodo)
         sessionMeta.set(directory, { limit })
       })

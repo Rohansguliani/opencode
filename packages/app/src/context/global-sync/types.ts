@@ -90,6 +90,12 @@ export type IconCache = {
   ready: Accessor<boolean>
 }
 
+export type SessionListCache = {
+  store: Store<{ value: Session[] }>
+  setStore: SetStoreFunction<{ value: Session[] }>
+  ready: Accessor<boolean>
+}
+
 export type ChildOptions = {
   bootstrap?: boolean
 }
