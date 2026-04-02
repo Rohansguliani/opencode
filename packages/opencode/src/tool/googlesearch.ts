@@ -73,12 +73,20 @@ export const GoogleSearchTool = Tool.define("googlesearch", {
     const candidate = json.candidates?.[0]
     const text = candidate?.content?.parts?.[0]?.text || "No summary response received."
     const grounding = candidate?.groundingMetadata
-    const sources = grounding?.groundingChunks
-      ?.flatMap((chunk) => {
-        if (!chunk.web?.uri) return []
-        return [`- [${chunk.web.title || "Web Link"}](${chunk.web.uri})`]
-      })
-      .join("\n")
+
+    const uniqueUris = new Set<string>()
+    const sourceLinks: string[] = []
+
+    for (const chunk of grounding?.groundingChunks ?? []) {
+      if (!chunk.web?.uri) continue
+      if (uniqueUris.has(chunk.web.uri)) continue
+      uniqueUris.add(chunk.web.uri)
+
+      const title = chunk.web.title?.trim() || "Web Link"
+      sourceLinks.push(`- [${title}](${chunk.web.uri})`)
+    }
+
+    const sources = sourceLinks.slice(0, 10).join("\n")
 
     return {
       title: `Google search: ${params.query}`,

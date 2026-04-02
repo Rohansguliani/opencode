@@ -125,52 +125,46 @@ describe("layout workspace helpers", () => {
   })
 
   test("finds the latest root session across workspaces", () => {
-    const result = latestRootSession(
-      [
-        {
-          path: { directory: "/root" },
-          session: [session({ id: "root", directory: "/root", time: { created: 1, updated: 1, archived: undefined } })],
-        },
-        {
-          path: { directory: "/workspace" },
-          session: [
-            session({
-              id: "workspace",
-              directory: "/workspace",
-              time: { created: 2, updated: 2, archived: undefined },
-            }),
-          ],
-        },
-      ],
-      120_000,
-    )
+    const result = latestRootSession([
+      {
+        path: { directory: "/root" },
+        session: [session({ id: "root", directory: "/root", time: { created: 1, updated: 1, archived: undefined } })],
+      },
+      {
+        path: { directory: "/workspace" },
+        session: [
+          session({
+            id: "workspace",
+            directory: "/workspace",
+            time: { created: 2, updated: 2, archived: undefined },
+          }),
+        ],
+      },
+    ])
 
     expect(result?.id).toBe("workspace")
   })
 
   test("filters sessions by logical workspace id", () => {
-    const result = latestRootSession(
-      [
-        {
-          path: { directory: "/root?workspace=wrk_a" },
-          session: [
-            session({
-              id: "a",
-              directory: "/root",
-              workspaceID: "wrk_a",
-              time: { created: 1, updated: 1, archived: undefined },
-            }),
-            session({
-              id: "b",
-              directory: "/root",
-              workspaceID: "wrk_b",
-              time: { created: 2, updated: 2, archived: undefined },
-            }),
-          ],
-        },
-      ],
-      120_000,
-    )
+    const result = latestRootSession([
+      {
+        path: { directory: "/root?workspace=wrk_a" },
+        session: [
+          session({
+            id: "a",
+            directory: "/root",
+            workspaceID: "wrk_a",
+            time: { created: 1, updated: 1, archived: undefined },
+          }),
+          session({
+            id: "b",
+            directory: "/root",
+            workspaceID: "wrk_b",
+            time: { created: 2, updated: 2, archived: undefined },
+          }),
+        ],
+      },
+    ])
 
     expect(result?.id).toBe("a")
   })
@@ -199,32 +193,29 @@ describe("layout workspace helpers", () => {
   })
 
   test("ignores archived and child sessions when finding latest root session", () => {
-    const result = latestRootSession(
-      [
-        {
-          path: { directory: "/workspace" },
-          session: [
-            session({
-              id: "archived",
-              directory: "/workspace",
-              time: { created: 10, updated: 10, archived: 10 },
-            }),
-            session({
-              id: "child",
-              directory: "/workspace",
-              parentID: "parent",
-              time: { created: 20, updated: 20, archived: undefined },
-            }),
-            session({
-              id: "root",
-              directory: "/workspace",
-              time: { created: 30, updated: 30, archived: undefined },
-            }),
-          ],
-        },
-      ],
-      120_000,
-    )
+    const result = latestRootSession([
+      {
+        path: { directory: "/workspace" },
+        session: [
+          session({
+            id: "archived",
+            directory: "/workspace",
+            time: { created: 10, updated: 10, archived: 10 },
+          }),
+          session({
+            id: "child",
+            directory: "/workspace",
+            parentID: "parent",
+            time: { created: 20, updated: 20, archived: undefined },
+          }),
+          session({
+            id: "root",
+            directory: "/workspace",
+            time: { created: 30, updated: 30, archived: undefined },
+          }),
+        ],
+      },
+    ])
 
     expect(result?.id).toBe("root")
   })

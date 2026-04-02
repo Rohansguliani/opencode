@@ -10,7 +10,9 @@ export const workspaceKey = (directory: string) => {
   const root = drive
     ? `${drive[1]}${workspace.root.includes("\\") ? "\\" : "/"}`
     : /^[\\/]+$/.test(workspace.root)
-      ? workspace.root.includes("\\") ? "\\" : "/"
+      ? workspace.root.includes("\\")
+        ? "\\"
+        : "/"
       : workspace.root.replace(/[\\/]+$/, "")
   return joinWorkspace(root, workspace.id)
 }
@@ -25,11 +27,13 @@ const isRootVisibleSession = (session: Session, directory: string) => {
   )
 }
 
-export const sortedRootSessions = (store: { session: Session[]; path: { directory: string } }, _now: number) => {
-  return store.session.filter((session) => isRootVisibleSession(session, store.path.directory)).sort(compareSessionRecent)
+export const sortedRootSessions = (store: { session: Session[]; path: { directory: string } }) => {
+  return store.session
+    .filter((session) => isRootVisibleSession(session, store.path.directory))
+    .sort(compareSessionRecent)
 }
 
-export const latestRootSession = (stores: { session: Session[]; path: { directory: string } }[], _now: number) => {
+export const latestRootSession = (stores: { session: Session[]; path: { directory: string } }[]) => {
   return stores
     .flatMap((store) => store.session.filter((session) => isRootVisibleSession(session, store.path.directory)))
     .sort(compareSessionRecent)[0]
@@ -61,7 +65,8 @@ export const childMapByParent = (sessions: Session[]) => {
   return map
 }
 
-export const displayName = (project: { name?: string; worktree: string }) => project.name || workspaceTitle(project.worktree, "Workspace")
+export const displayName = (project: { name?: string; worktree: string }) =>
+  project.name || workspaceTitle(project.worktree, "Workspace")
 
 export const errorMessage = (err: unknown, fallback: string) => {
   if (err && typeof err === "object" && "data" in err) {

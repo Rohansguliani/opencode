@@ -1511,6 +1511,38 @@ export type BadRequestError = {
   success: false
 }
 
+export type WorkspaceState = {
+  actor: string
+  projects: Array<{
+    worktree: string
+    expanded: boolean
+    name?: string
+  }>
+  lastProject?: string
+  page: {
+    activeProject?: string
+    activeWorkspace?: string
+    favorites: Array<string>
+    workspaceOrder: {
+      [key: string]: Array<string>
+    }
+    workspaceName: {
+      [key: string]: string
+    }
+    workspaceBranchName: {
+      [key: string]: {
+        [key: string]: string
+      }
+    }
+    workspaceExpanded: {
+      [key: string]: boolean
+    }
+  }
+  time: {
+    updated: number
+  }
+}
+
 export type OAuth = {
   type: "oauth"
   refresh: string
@@ -1982,6 +2014,74 @@ export type GlobalConfigUpdateResponses = {
 }
 
 export type GlobalConfigUpdateResponse = GlobalConfigUpdateResponses[keyof GlobalConfigUpdateResponses]
+
+export type GlobalWorkspaceStateGetData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/global/workspace-state"
+}
+
+export type GlobalWorkspaceStateGetResponses = {
+  /**
+   * Workspace state
+   */
+  200: WorkspaceState
+}
+
+export type GlobalWorkspaceStateGetResponse = GlobalWorkspaceStateGetResponses[keyof GlobalWorkspaceStateGetResponses]
+
+export type GlobalWorkspaceStateUpdateData = {
+  body?: {
+    projects: Array<{
+      worktree: string
+      expanded: boolean
+      name?: string
+    }>
+    lastProject?: string
+    page: {
+      activeProject?: string
+      activeWorkspace?: string
+      favorites: Array<string>
+      workspaceOrder: {
+        [key: string]: Array<string>
+      }
+      workspaceName: {
+        [key: string]: string
+      }
+      workspaceBranchName: {
+        [key: string]: {
+          [key: string]: string
+        }
+      }
+      workspaceExpanded: {
+        [key: string]: boolean
+      }
+    }
+  }
+  path?: never
+  query?: never
+  url: "/global/workspace-state"
+}
+
+export type GlobalWorkspaceStateUpdateErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type GlobalWorkspaceStateUpdateError = GlobalWorkspaceStateUpdateErrors[keyof GlobalWorkspaceStateUpdateErrors]
+
+export type GlobalWorkspaceStateUpdateResponses = {
+  /**
+   * Workspace state
+   */
+  200: WorkspaceState
+}
+
+export type GlobalWorkspaceStateUpdateResponse =
+  GlobalWorkspaceStateUpdateResponses[keyof GlobalWorkspaceStateUpdateResponses]
 
 export type GlobalDisposeData = {
   body?: never
@@ -3317,6 +3417,8 @@ export type SessionPromptData = {
     format?: OutputFormat
     system?: string
     variant?: string
+    ephemeral?: boolean
+    frozen?: boolean
     parts: Array<TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput>
   }
   path: {
@@ -3499,6 +3601,63 @@ export type PartUpdateResponses = {
 
 export type PartUpdateResponse = PartUpdateResponses[keyof PartUpdateResponses]
 
+export type SessionOracleData = {
+  body?: {
+    messageID?: string
+    model?: {
+      providerID: string
+      modelID: string
+    }
+    agent?: string
+    noReply?: boolean
+    /**
+     * @deprecated tools and permissions have been merged, you can set permissions on the session itself now
+     */
+    tools?: {
+      [key: string]: boolean
+    }
+    format?: OutputFormat
+    system?: string
+    variant?: string
+    ephemeral?: boolean
+    frozen?: boolean
+    parts: Array<TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput>
+  }
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/session/{sessionID}/oracle"
+}
+
+export type SessionOracleErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type SessionOracleError = SessionOracleErrors[keyof SessionOracleErrors]
+
+export type SessionOracleResponses = {
+  /**
+   * Ephemeral assistant message
+   */
+  200: {
+    info: AssistantMessage
+    parts: Array<Part>
+  }
+}
+
+export type SessionOracleResponse = SessionOracleResponses[keyof SessionOracleResponses]
+
 export type SessionPromptAsyncData = {
   body?: {
     messageID?: string
@@ -3517,6 +3676,8 @@ export type SessionPromptAsyncData = {
     format?: OutputFormat
     system?: string
     variant?: string
+    ephemeral?: boolean
+    frozen?: boolean
     parts: Array<TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput>
   }
   path: {

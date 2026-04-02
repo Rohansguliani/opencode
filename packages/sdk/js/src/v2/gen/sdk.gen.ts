@@ -46,6 +46,9 @@ import type {
   GlobalDisposeResponses,
   GlobalEventResponses,
   GlobalHealthResponses,
+  GlobalWorkspaceStateGetResponses,
+  GlobalWorkspaceStateUpdateErrors,
+  GlobalWorkspaceStateUpdateResponses,
   InstanceDisposeResponses,
   LspStatusResponses,
   McpAddErrors,
@@ -129,6 +132,8 @@ import type {
   SessionMessageResponses,
   SessionMessagesErrors,
   SessionMessagesResponses,
+  SessionOracleErrors,
+  SessionOracleResponses,
   SessionPromptAsyncErrors,
   SessionPromptAsyncResponses,
   SessionPromptErrors,
@@ -268,6 +273,83 @@ export class Config extends HeyApiClient {
   }
 }
 
+export class WorkspaceState extends HeyApiClient {
+  /**
+   * Get workspace state
+   *
+   * Retrieve persisted workspace UI state for the current user on this server.
+   */
+  public get<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
+    return (options?.client ?? this.client).get<GlobalWorkspaceStateGetResponses, unknown, ThrowOnError>({
+      url: "/global/workspace-state",
+      ...options,
+    })
+  }
+
+  /**
+   * Update workspace state
+   *
+   * Persist workspace UI state for the current user on this server.
+   */
+  public update<ThrowOnError extends boolean = false>(
+    parameters?: {
+      projects?: Array<{
+        worktree: string
+        expanded: boolean
+        name?: string
+      }>
+      lastProject?: string
+      page?: {
+        activeProject?: string
+        activeWorkspace?: string
+        favorites: Array<string>
+        workspaceOrder: {
+          [key: string]: Array<string>
+        }
+        workspaceName: {
+          [key: string]: string
+        }
+        workspaceBranchName: {
+          [key: string]: {
+            [key: string]: string
+          }
+        }
+        workspaceExpanded: {
+          [key: string]: boolean
+        }
+      }
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "body", key: "projects" },
+            { in: "body", key: "lastProject" },
+            { in: "body", key: "page" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).patch<
+      GlobalWorkspaceStateUpdateResponses,
+      GlobalWorkspaceStateUpdateErrors,
+      ThrowOnError
+    >({
+      url: "/global/workspace-state",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
 export class Global extends HeyApiClient {
   /**
    * Get health
@@ -308,6 +390,11 @@ export class Global extends HeyApiClient {
   private _config?: Config
   get config(): Config {
     return (this._config ??= new Config({ client: this.client }))
+  }
+
+  private _workspaceState?: WorkspaceState
+  get workspaceState(): WorkspaceState {
+    return (this._workspaceState ??= new WorkspaceState({ client: this.client }))
   }
 }
 
@@ -1902,6 +1989,8 @@ export class Session2 extends HeyApiClient {
       format?: OutputFormat
       system?: string
       variant?: string
+      ephemeral?: boolean
+      frozen?: boolean
       parts?: Array<TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput>
     },
     options?: Options<never, ThrowOnError>,
@@ -1922,6 +2011,8 @@ export class Session2 extends HeyApiClient {
             { in: "body", key: "format" },
             { in: "body", key: "system" },
             { in: "body", key: "variant" },
+            { in: "body", key: "ephemeral" },
+            { in: "body", key: "frozen" },
             { in: "body", key: "parts" },
           ],
         },
@@ -2012,6 +2103,70 @@ export class Session2 extends HeyApiClient {
   }
 
   /**
+   * Send frozen-context message
+   *
+   * Query the current session context without persisting the new user/assistant turn.
+   */
+  public oracle<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+      workspace?: string
+      messageID?: string
+      model?: {
+        providerID: string
+        modelID: string
+      }
+      agent?: string
+      noReply?: boolean
+      tools?: {
+        [key: string]: boolean
+      }
+      format?: OutputFormat
+      system?: string
+      variant?: string
+      ephemeral?: boolean
+      frozen?: boolean
+      parts?: Array<TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput>
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "messageID" },
+            { in: "body", key: "model" },
+            { in: "body", key: "agent" },
+            { in: "body", key: "noReply" },
+            { in: "body", key: "tools" },
+            { in: "body", key: "format" },
+            { in: "body", key: "system" },
+            { in: "body", key: "variant" },
+            { in: "body", key: "ephemeral" },
+            { in: "body", key: "frozen" },
+            { in: "body", key: "parts" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<SessionOracleResponses, SessionOracleErrors, ThrowOnError>({
+      url: "/session/{sessionID}/oracle",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
    * Send async message
    *
    * Create and send a new message to a session asynchronously, starting the session if needed and returning immediately.
@@ -2034,6 +2189,8 @@ export class Session2 extends HeyApiClient {
       format?: OutputFormat
       system?: string
       variant?: string
+      ephemeral?: boolean
+      frozen?: boolean
       parts?: Array<TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput>
     },
     options?: Options<never, ThrowOnError>,
@@ -2054,6 +2211,8 @@ export class Session2 extends HeyApiClient {
             { in: "body", key: "format" },
             { in: "body", key: "system" },
             { in: "body", key: "variant" },
+            { in: "body", key: "ephemeral" },
+            { in: "body", key: "frozen" },
             { in: "body", key: "parts" },
           ],
         },

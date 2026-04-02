@@ -27,6 +27,7 @@ export type SessionCommandContext = {
   navigateMessageByOffset: (offset: number) => void
   setActiveMessage: (message: UserMessage | undefined) => void
   focusInput: () => void
+  enabled?: () => boolean
   review?: () => boolean
 }
 
@@ -135,6 +136,7 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
     return permission.isAutoAcceptingDirectory(sdk.directory)
   }
   command.register("session", () => {
+    if (actions.enabled && !actions.enabled()) return []
     const share =
       sync.data.config.share === "disabled"
         ? []
