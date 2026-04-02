@@ -5,6 +5,8 @@ import { type Config } from "./gen/client/types.gen.js"
 import { OpencodeClient } from "./gen/sdk.gen.js"
 export { type Config as OpencodeClientConfig, OpencodeClient }
 
+import { splitWorkspace } from "./workspace.js"
+
 export function createOpencodeClient(config?: Config & { directory?: string; experimental_workspaceID?: string }) {
   if (!config?.fetch) {
     const customFetch: any = (req: any) => {
@@ -19,10 +21,10 @@ export function createOpencodeClient(config?: Config & { directory?: string; exp
   }
 
   if (config?.directory) {
-    if (config.directory.includes('?workspace=')) {
-      const parts = config.directory.split('?workspace=');
-      config.directory = parts[0];
-      config.experimental_workspaceID = parts[1];
+    const parts = splitWorkspace(config.directory)
+    config.directory = parts.root
+    if (parts.id) {
+      config.experimental_workspaceID = parts.id
     }
     const isNonASCII = /[^\x00-\x7F]/.test(config.directory)
     const encodedDirectory = isNonASCII ? encodeURIComponent(config.directory) : config.directory

@@ -9,6 +9,7 @@ import { Flag } from "@/flag/flag"
 import { fn } from "@opencode-ai/util/fn"
 import { BusEvent } from "@/bus/bus-event"
 import { iife } from "@/util/iife"
+import { splitWorkspace } from "@opencode-ai/util/workspace"
 import { GlobalBus } from "@/bus/global"
 import { existsSync } from "fs"
 import { git } from "../util/git"
@@ -96,13 +97,13 @@ export namespace Project {
   }
 
   export async function fromDirectory(rawDirectory: string) {
-    let directory = rawDirectory;
+    let directory = rawDirectory
     try {
-      const decoded = decodeURIComponent(rawDirectory);
-      const parts = decoded.split("?workspace=");
-      directory = parts[0];
-    } catch(e) {
-      directory = rawDirectory;
+      const decoded = decodeURIComponent(rawDirectory)
+      const parts = splitWorkspace(decoded)
+      directory = parts.root
+    } catch (e) {
+      directory = rawDirectory
     }
     log.info("fromDirectory", { directory })
 

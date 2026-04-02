@@ -31,25 +31,23 @@ import { ModelID, ProviderID } from "@/provider/schema"
 import { PermissionNext } from "@/permission/next"
 import { Global } from "@/global"
 import type { LanguageModelV2Usage } from "@ai-sdk/provider"
+import { splitWorkspace } from "@opencode-ai/util/workspace"
 import { iife } from "@/util/iife"
 
 export namespace Session {
-
   function stripWorkspace(dir: string | undefined) {
-    if (!dir) return { directory: dir, workspace_id: undefined };
-    let cleanDir = dir;
-    let wsId = undefined;
+    if (!dir) return { directory: dir, workspace_id: undefined }
+    let cleanDir = dir
+    let wsId = undefined
     try {
-      const decoded = decodeURIComponent(dir);
-      const parts = decoded.split("?workspace=");
-      cleanDir = parts[0];
-      if (parts.length > 1) {
-        wsId = parts[1];
-      }
-    } catch(e) {
-      cleanDir = dir;
+      const decoded = decodeURIComponent(dir)
+      const parts = splitWorkspace(decoded)
+      cleanDir = parts.root
+      if (parts.id) wsId = parts.id
+    } catch (e) {
+      cleanDir = dir
     }
-    return { directory: cleanDir, workspace_id: wsId };
+    return { directory: cleanDir, workspace_id: wsId }
   }
 
   const log = Log.create({ service: "session" })
@@ -570,15 +568,15 @@ export namespace Session {
       conditions.push(eq(SessionTable.workspace_id, WorkspaceContext.workspaceID))
     }
     if (input?.directory) {
-      const parsed = stripWorkspace(input.directory);
-      conditions.push(eq(SessionTable.directory, parsed.directory as string));
+      const parsed = stripWorkspace(input.directory)
+      conditions.push(eq(SessionTable.directory, parsed.directory as string))
       // In list(), WorkspaceContext handles the workspace ID natively, but if it didn't
       // trigger the middleware (e.g. nested calls), we enforce it here safely.
       if (parsed.workspace_id && !WorkspaceContext.workspaceID) {
-         conditions.push(eq(SessionTable.workspace_id, WorkspaceID.make(parsed.workspace_id as string)));
-       } else if (!parsed.workspace_id && !WorkspaceContext.workspaceID) {
-         conditions.push(isNull(SessionTable.workspace_id))
-       }
+        conditions.push(eq(SessionTable.workspace_id, WorkspaceID.make(parsed.workspace_id as string)))
+      } else if (!parsed.workspace_id && !WorkspaceContext.workspaceID) {
+        conditions.push(isNull(SessionTable.workspace_id))
+      }
     }
     if (input?.roots) {
       conditions.push(isNull(SessionTable.parent_id))
@@ -619,10 +617,10 @@ export namespace Session {
     const conditions: SQL[] = []
 
     if (input?.directory) {
-      const parsed = stripWorkspace(input.directory);
-      conditions.push(eq(SessionTable.directory, parsed.directory as string));
+      const parsed = stripWorkspace(input.directory)
+      conditions.push(eq(SessionTable.directory, parsed.directory as string))
       if (parsed.workspace_id) {
-         conditions.push(eq(SessionTable.workspace_id, WorkspaceID.make(parsed.workspace_id as string)));
+        conditions.push(eq(SessionTable.workspace_id, WorkspaceID.make(parsed.workspace_id as string)))
       }
     }
     if (input?.roots) {
