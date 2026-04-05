@@ -384,6 +384,7 @@ function createGlobalSync() {
       return globalStore.error
     },
     child: children.child,
+    isLoadingSessions: (directory: string) => sessionLoads.has(directory),
     bootstrap,
     updateConfig,
     project: projectApi,
