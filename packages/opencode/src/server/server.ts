@@ -4,6 +4,7 @@ import { Log } from "../util/log"
 import * as path from "node:path"
 import { describeRoute, generateSpecs, validator, resolver, openAPIRouteHandler } from "hono-openapi"
 import { Hono } from "hono"
+import { compress } from "hono/compress"
 import { cors } from "hono/cors"
 import { streamSSE } from "hono/streaming"
 import { proxy } from "hono/proxy"
@@ -70,6 +71,7 @@ export namespace Server {
 
   export const createApp = (opts: { cors?: string[] }): Hono => {
     const app = new Hono()
+    app.use(compress())
     return app
       .onError((err, c) => {
         log.error("failed", {
@@ -591,6 +593,13 @@ export namespace Server {
                 "Content-Security-Policy",
                 "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; media-src 'self' data:; connect-src 'self' data:",
               )
+              
+              if (reqPath.startsWith("/assets/")) {
+                response.headers.set("Cache-Control", "public, max-age=31536000, immutable")
+              } else {
+                response.headers.set("Cache-Control", "no-cache")
+              }
+
               return response
             }
           }
