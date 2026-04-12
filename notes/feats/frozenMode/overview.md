@@ -29,7 +29,7 @@ The immediate goal is to build an **Oracle Mode toggle** (a "Freeze Context" but
 - **Oracle Endpoint**: `POST /:sessionID/oracle` in `packages/opencode/src/server/routes/session.ts` runs a stateless frozen query and returns an assistant message payload without persisting the turn.
 - **No DB Persistence**: `packages/opencode/src/session/prompt.ts` builds the frozen user/assistant turn in memory only when `ephemeral` is set.
 - **Context Exclusion**: Frozen turns are tagged with `metadata.frozen = true`, and `packages/opencode/src/session/message-v2.ts` filters them out of future model context unless the currently executing frozen turn explicitly includes itself.
-- **Read-Only Intent**: Oracle mode resolves tools through a read-only allowlist so frozen prompts behave like scratchpad questions rather than mutation requests.
+- **Mutation Permitted**: Originally, Oracle mode included a strict system prompt to restrict the agent to read-only tools. This has been removed. The AI is now fully permitted to use mutating tools (`write`, `bash`, `edit`) during a frozen turn. Because the AI can mutate files during a frozen turn *without remembering it on the next turn*, the user assumes responsibility for ensuring the AI's mental context does not dangerously desync from the hard drive state.
 
 ### 3. Behavior Guarantees
 - **Visible But Stateless**: Frozen turns show up in the frontend timeline, but they are not appended to the session's persisted history.
@@ -56,6 +56,6 @@ The immediate goal is to build an **Oracle Mode toggle** (a "Freeze Context" but
   - Alternatively, create a dedicated `POST /:sessionID/oracle` endpoint in `server/routes/session.ts` to clearly separate permanent conversational prompts from stateless queries.
 
 ### 3. Edge Cases & Considerations
-- **Tools / Actions in Oracle Mode**: If the agent uses tools (like `edit` or `bash`) while frozen, does it actually execute them? Ideally, Oracle Mode should be strictly "read-only" (answering questions) or restricted to read tools (`ReadTool`, `Glob`, `Grep`) to prevent unintended state mutations while the context is frozen.
+- **Tools / Actions in Oracle Mode**: The agent is allowed to use any tool (including `bash` and `write`) while frozen. If the user asks the agent to modify code during a frozen turn, the file on disk will change but the agent's memory of that change will be forgotten on the next prompt. The user must be aware of this "State Desync" risk.
 - **Context Revert**: We must ensure that the "frozen" state doesn't accidentally trigger a `SessionRevert.cleanup` or compaction that alters the database state of the underlying session.
 - **UI Persistence**: The final behavior is not to hide frozen turns when frozen mode is toggled off or when the user switches chats. They should stay visible in the timeline for that session, but remain excluded from future prompt context.

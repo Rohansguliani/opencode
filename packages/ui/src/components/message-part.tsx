@@ -1394,7 +1394,7 @@ PART_MAPPING["text"] = function TextPartDisplay(props) {
 
   return (
     <Show when={throttledText()}>
-      <div data-component="text-part">
+      <div data-component="text-part" data-frozen={frozen() ? "true" : undefined}>
         <div data-slot="text-part-body">
           <Markdown text={throttledText()} cacheKey={part().id} />
         </div>
