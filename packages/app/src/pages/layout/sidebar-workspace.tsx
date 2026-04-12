@@ -462,15 +462,34 @@ export const WorkspaceItem = (props: {
             <Show
               when={workspaceEditActive()}
               fallback={
-                <Collapsible.Trigger
-                  class={`flex items-center justify-between w-full py-1.5 rounded-md hover:bg-surface-raised-base-hover transition-[padding] duration-200 ${
-                    menu.open || props.combined ? "pr-16" : "pr-2"
-                  } ${props.combined ? "pl-1" : "pl-2"} group-hover/workspace:pr-16 group-focus-within/workspace:pr-16`}
-                  data-action="workspace-toggle"
-                  data-workspace={base64Encode(props.directory)}
+                <Show
+                  when={props.combined}
+                  fallback={
+                    <Collapsible.Trigger
+                      class={`flex items-center justify-between w-full py-1.5 rounded-md hover:bg-surface-raised-base-hover transition-[padding] duration-200 ${
+                        menu.open ? "pr-16" : "pr-2"
+                      } pl-2 group-hover/workspace:pr-16 group-focus-within/workspace:pr-16`}
+                      data-action="workspace-toggle"
+                      data-workspace={base64Encode(props.directory)}
+                    >
+                      {header()}
+                    </Collapsible.Trigger>
+                  }
                 >
-                  {header()}
-                </Collapsible.Trigger>
+                  <button
+                    class={`flex items-center justify-between w-full py-1.5 rounded-md hover:bg-surface-raised-base-hover transition-[padding] duration-200 ${
+                      menu.open || props.combined ? "pr-16" : "pr-2"
+                    } ${props.combined ? "pl-1" : "pl-2"} group-hover/workspace:pr-16 group-focus-within/workspace:pr-16`}
+                    data-action="workspace-hub"
+                    data-workspace={base64Encode(props.directory)}
+                    onClick={(e) => {
+                      e.preventDefault()
+                      navigate(`/${slug()}/project/${props.project.id}/hub`)
+                    }}
+                  >
+                    {header()}
+                  </button>
+                </Show>
               }
             >
               <div

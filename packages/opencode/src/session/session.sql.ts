@@ -1,4 +1,5 @@
 import { sqliteTable, text, integer, index, primaryKey } from "drizzle-orm/sqlite-core"
+import { sql } from "drizzle-orm"
 import { ProjectTable } from "../project/project.sql"
 import type { MessageV2 } from "./message-v2"
 import type { Snapshot } from "../snapshot"
@@ -101,3 +102,27 @@ export const PermissionTable = sqliteTable("permission", {
   ...Timestamps,
   data: text({ mode: "json" }).notNull().$type<PermissionNext.Ruleset>(),
 })
+
+export const PartFtsTable = sqliteTable("part_fts", {
+  part_id: text(),
+  message_id: text(),
+  session_id: text(),
+  project_id: text(),
+  content: text(),
+})
+
+export async function searchProjectMessages(db: any, projectId: string, query: string, limit = 10) {
+  return await db
+    .select({
+      part_id: PartFtsTable.part_id,
+      message_id: PartFtsTable.message_id,
+      session_id: PartFtsTable.session_id,
+      content: PartFtsTable.content,
+    })
+    .from(PartFtsTable)
+    .where(
+      sql`${PartFtsTable.project_id} = ${projectId} AND ${PartFtsTable.content} MATCH ${query}`
+    )
+    .limit(limit)
+    .all()
+}
