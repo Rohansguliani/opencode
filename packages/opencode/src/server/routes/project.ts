@@ -200,52 +200,58 @@ export const ProjectRoutes = lazy(() =>
         const sessionID = SessionID.descending()
         
         return streamSSE(c, async (stream) => {
-          const abort = new AbortController()
-          const agent = await Agent.get(agentName || "opencode")
-          if (!agent) throw new Error("Agent not found")
-          
-          const providerID = (modelInput?.providerID || agent.model?.providerID || "opencode") as any
-          const modelID = (modelInput?.modelID || agent.model?.modelID || "opencode") as any
-          const model = await Provider.getModel(providerID, modelID)
+          try {
+            const abort = new AbortController()
+            const resolvedAgentName = agentName || (await Agent.defaultAgent())
+            const agent = await Agent.get(resolvedAgentName)
+            if (!agent) throw new Error("Agent not found")
+            
+            const providerID = (modelInput?.providerID || agent.model?.providerID || "opencode") as any
+            const modelID = (modelInput?.modelID || agent.model?.modelID || "opencode") as any
+            const model = await Provider.getModel(providerID, modelID)
 
-          const userMsg = {
-            id: MessageID.ascending(),
-            parentID: MessageID.ascending(),
-            role: "user",
-            agent: agent.name,
-            model: modelInput || agent.model,
-            time: { created: Date.now() },
-            sessionID,
-            format: undefined,
-            tools: {},
-          } as unknown as MessageV2.User
-          
-          const skills = await SystemPrompt.skills(agent)
-          const system = [
-            ...(await SystemPrompt.environment(model)),
-            ...(skills ? [skills] : []),
-            ...(await InstructionPrompt.system()),
-            "<system-reminder>Project Oracle is active. Answer the user's query based on the provided context. Be concise and helpful.</system-reminder>"
-          ]
-          
-          const messages = [{
-            role: "user",
-            content: [{ type: "text", text: combinedPrompt }]
-          }]
-          
-          const llmStream = await LLM.stream({
-            user: userMsg,
-            agent,
-            abort: abort.signal,
-            sessionID,
-            system,
-            messages: messages as any,
-            tools: {},
-            model,
-          })
+            const userMsg = {
+              id: MessageID.ascending(),
+              parentID: MessageID.ascending(),
+              role: "user",
+              agent: agent.name,
+              model: modelInput || agent.model,
+              time: { created: Date.now() },
+              sessionID,
+              format: undefined,
+              tools: {},
+            } as unknown as MessageV2.User
+            
+            const skills = await SystemPrompt.skills(agent)
+            const system = [
+              ...(await SystemPrompt.environment(model)),
+              ...(skills ? [skills] : []),
+              ...(await InstructionPrompt.system()),
+              "<system-reminder>Project Oracle is active. Answer the user's query based on the provided context. Be concise and helpful.</system-reminder>"
+            ]
+            
+            const messages = [{
+              role: "user",
+              content: [{ type: "text", text: combinedPrompt }]
+            }]
+            
+            const llmStream = await LLM.stream({
+              user: userMsg,
+              agent,
+              abort: abort.signal,
+              sessionID,
+              system,
+              messages: messages as any,
+              tools: {},
+              model,
+            })
 
-          for await (const value of llmStream.fullStream) {
-            await stream.writeSSE({ data: JSON.stringify(value) })
+            for await (const value of llmStream.fullStream) {
+              await stream.writeSSE({ data: JSON.stringify(value) })
+            }
+          } catch (e: any) {
+            console.error("Oracle stream error:", e)
+            await stream.writeSSE({ data: JSON.stringify({ type: "text-delta", text: `\n\n[Error: ${e.message}]` }) })
           }
         })
       }
@@ -286,8 +292,8 @@ export const ProjectRoutes = lazy(() =>
              title: prompt.substring(0, 50),
              slug: prompt.substring(0, 50).replace(/[^a-z0-9]/gi, "-").toLowerCase(),
              version: "2",
-             created_at: Date.now(),
-             updated_at: Date.now(),
+             time_created: Date.now(),
+             time_updated: Date.now(),
            })
 
            const userMsgID = MessageID.ascending()
@@ -295,8 +301,8 @@ export const ProjectRoutes = lazy(() =>
              id: userMsgID,
              session_id: sessionID,
              project_id: projectId,
-             created_at: Date.now(),
-             updated_at: Date.now(),
+             time_created: Date.now(),
+             time_updated: Date.now(),
              data: {
                id: userMsgID,
                role: "user",
@@ -308,8 +314,8 @@ export const ProjectRoutes = lazy(() =>
              id: PartID.ascending(),
              message_id: userMsgID,
              session_id: sessionID,
-             created_at: Date.now(),
-             updated_at: Date.now(),
+             time_created: Date.now(),
+             time_updated: Date.now(),
              data: { type: "text", text: prompt } as any
            })
 
@@ -318,8 +324,8 @@ export const ProjectRoutes = lazy(() =>
              id: asstMsgID,
              session_id: sessionID,
              project_id: projectId,
-             created_at: Date.now(),
-             updated_at: Date.now(),
+             time_created: Date.now(),
+             time_updated: Date.now(),
              data: {
                id: asstMsgID,
                parentID: userMsgID,
@@ -332,8 +338,8 @@ export const ProjectRoutes = lazy(() =>
              id: PartID.ascending(),
              message_id: asstMsgID,
              session_id: sessionID,
-             created_at: Date.now(),
-             updated_at: Date.now(),
+             time_created: Date.now(),
+             time_updated: Date.now(),
              data: { type: "text", text: response } as any
            })
         })

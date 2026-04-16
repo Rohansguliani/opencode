@@ -10,6 +10,10 @@ import { useSDK } from "@/context/sdk"
 import { Markdown } from "@opencode-ai/ui/markdown"
 import { base64Encode } from "@opencode-ai/util/encode"
 import { ServerConnection, useServer } from "@/context/server"
+import { ModelSelectorPopover } from "@/components/dialog-select-model"
+import { Icon } from "@opencode-ai/ui/icon"
+import { useLocal } from "@/context/local"
+import { useLanguage } from "@/context/language"
 
 function auth(server: ServerConnection.HttpBase) {
   const headers = new Headers()
@@ -22,10 +26,12 @@ export default function ProjectHub() {
   const navigate = useNavigate()
   const globalSync = useGlobalSync()
   const serverCtx = useServer()
+  const local = useLocal()
+  const language = useLanguage()
   
   const directory = createMemo(() => decode64(params.dir) ?? "")
-  const [store] = globalSync.child(directory(), { bootstrap: true })
-  const sessions = createMemo(() => sortedRootSessions(store))
+  const store = createMemo(() => globalSync.child(directory(), { bootstrap: true })[0])
+  const sessions = createMemo(() => sortedRootSessions(store()))
   
   const [query, setQuery] = createSignal("")
   const [submittedQuery, setSubmittedQuery] = createSignal("")
@@ -56,7 +62,7 @@ export default function ProjectHub() {
       const server = serverCtx.current
       if (!server || server.type !== "http") throw new Error("No HTTP server connection")
       
-      const projectId = store.project
+      const projectId = store().project
       if (!projectId) throw new Error("No Project ID found")
 
       const res = await fetch(`${server.http.url}/project/${projectId}/oracle`, {
@@ -66,7 +72,13 @@ export default function ProjectHub() {
           Accept: "text/event-stream",
           ...Object.fromEntries(auth(server.http).entries()),
         }),
-        body: JSON.stringify({ prompt }),
+        body: JSON.stringify({ 
+          prompt,
+          model: local.model.current() ? {
+            providerID: local.model.current()?.provider.id,
+            modelID: local.model.current()?.id
+          } : undefined
+        }),
         signal: abortController.signal
       })
 
@@ -111,7 +123,7 @@ export default function ProjectHub() {
     if (!server || server.type !== "http") return
 
     try {
-      const projectId = store.project
+      const projectId = store().project
       if (!projectId) return
 
       const res = await fetch(`${server.http.url}/project/${projectId}/promote`, {
@@ -148,7 +160,7 @@ export default function ProjectHub() {
           Project Hub
         </div>
         
-        <div class="w-full">
+        <div class="w-full flex flex-col gap-2">
           <TextField
             value={query()}
             onChange={setQuery}
@@ -161,6 +173,22 @@ export default function ProjectHub() {
               }
             }}
           />
+          <div class="flex items-center self-end px-1">
+            <ModelSelectorPopover
+              model={local.model}
+              triggerAs={Button}
+              triggerProps={{
+                variant: "ghost",
+                size: "small",
+                class: "min-w-0 max-w-[320px] text-12-medium text-text-weak hover:text-text-base group flex items-center gap-1.5",
+              }}
+            >
+              <span class="truncate">
+                {local.model.current()?.name ?? language.t("dialog.model.select.title")}
+              </span>
+              <Icon name="chevron-down" size="small" class="shrink-0 opacity-50 group-hover:opacity-100" />
+            </ModelSelectorPopover>
+          </div>
         </div>
         
         <Show when={submittedQuery()}>

@@ -112,6 +112,10 @@ export const PartFtsTable = sqliteTable("part_fts", {
 })
 
 export async function searchProjectMessages(db: any, projectId: string, query: string, limit = 10) {
+  // Sanitize the query to prevent FTS syntax errors
+  const sanitizedQuery = query.replace(/[^\w\s]/g, ' ')
+  if (!sanitizedQuery.trim()) return []
+
   return await db
     .select({
       part_id: PartFtsTable.part_id,
@@ -121,7 +125,7 @@ export async function searchProjectMessages(db: any, projectId: string, query: s
     })
     .from(PartFtsTable)
     .where(
-      sql`${PartFtsTable.project_id} = ${projectId} AND ${PartFtsTable.content} MATCH ${query}`
+      sql`${PartFtsTable.project_id} = ${projectId} AND ${PartFtsTable.content} MATCH ${sanitizedQuery}`
     )
     .limit(limit)
     .all()
