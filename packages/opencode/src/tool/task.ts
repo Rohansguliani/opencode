@@ -1,5 +1,6 @@
+import { readFileSync } from "fs"
 import { Tool } from "./tool"
-import DESCRIPTION from "./task.txt"
+const DESCRIPTION = readFileSync(new URL("./task.txt", import.meta.url), "utf-8")
 import z from "zod"
 import { Session } from "../session"
 import { SessionID, MessageID } from "../session/schema"

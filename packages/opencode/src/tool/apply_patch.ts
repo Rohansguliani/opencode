@@ -1,3 +1,4 @@
+import { readFileSync } from "fs"
 import z from "zod"
 import * as path from "path"
 import * as fs from "fs/promises"
@@ -11,7 +12,7 @@ import { assertExternalDirectory } from "./external-directory"
 import { trimDiff } from "./edit"
 import { LSP } from "../lsp"
 import { Filesystem } from "../util/filesystem"
-import DESCRIPTION from "./apply_patch.txt"
+const DESCRIPTION = readFileSync(new URL("./apply_patch.txt", import.meta.url), "utf-8")
 import { File } from "../file"
 
 const PatchParams = z.object({

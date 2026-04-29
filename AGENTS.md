@@ -12,7 +12,7 @@
 - Avoid `try`/`catch` where possible
 - Avoid using the `any` type
 - Prefer single word variable names where possible
-- Use Bun APIs when possible, like `Bun.file()`
+- Use Node.js APIs instead of Bun APIs.
 - Rely on type inference when possible; avoid explicit type annotations or interfaces unless necessary for exports or clarity
 - Prefer functional array methods (flatMap, filter, map) over for loops; use type guards on filter to maintain type inference downstream
 
@@ -125,4 +125,4 @@ const table = sqliteTable("session", {
 
 ## Type Checking
 
-- Always run `bun typecheck` from package directories (e.g., `packages/opencode`), never `tsc` directly.
+- Always run `npm run typecheck` from package directories or project root.

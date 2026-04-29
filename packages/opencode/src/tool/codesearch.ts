@@ -1,6 +1,7 @@
+import { readFileSync } from "fs"
 import z from "zod"
 import { Tool } from "./tool"
-import DESCRIPTION from "./codesearch.txt"
+const DESCRIPTION = readFileSync(new URL("./codesearch.txt", import.meta.url), "utf-8")
 import { abortAfterAny } from "../util/abort"
 
 const API_CONFIG = {

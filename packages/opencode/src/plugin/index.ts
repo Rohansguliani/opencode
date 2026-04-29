@@ -12,6 +12,14 @@ import { Session } from "../session"
 import { NamedError } from "@opencode-ai/util/error"
 import { CopilotAuthPlugin } from "./copilot"
 import { gitlabAuthPlugin as GitlabAuthPlugin } from "@gitlab/opencode-gitlab-auth"
+import { exec } from "child_process"
+import { promisify } from "util"
+
+const execAsync = promisify(exec)
+const $ = (strings: TemplateStringsArray, ...values: any[]) => {
+  const cmd = strings.reduce((acc, str, i) => acc + str + (values[i] ?? ''), '')
+  return execAsync(cmd)
+}
 
 export namespace Plugin {
   const log = Log.create({ service: "plugin" })
@@ -42,7 +50,7 @@ export namespace Plugin {
       get serverUrl(): URL {
         return Server.url ?? new URL("http://localhost:4096")
       },
-      $: Bun.$,
+      $: $,
     }
 
     for (const plugin of INTERNAL_PLUGINS) {

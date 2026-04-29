@@ -1,3 +1,4 @@
+import { readFileSync } from "fs"
 import z from "zod"
 import path from "path"
 import { Tool } from "./tool"
@@ -7,7 +8,7 @@ import { MessageV2 } from "../session/message-v2"
 import { Provider } from "../provider/provider"
 import { Instance } from "../project/instance"
 import { type SessionID, MessageID, PartID } from "../session/schema"
-import EXIT_DESCRIPTION from "./plan-exit.txt"
+const EXIT_DESCRIPTION = readFileSync(new URL("./plan-exit.txt", import.meta.url), "utf-8")
 
 async function getLastModel(sessionID: SessionID) {
   for await (const item of MessageV2.stream(sessionID)) {

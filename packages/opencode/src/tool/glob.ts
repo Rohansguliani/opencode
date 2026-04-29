@@ -1,8 +1,9 @@
+import { readFileSync } from "fs"
 import z from "zod"
 import path from "path"
 import { Tool } from "./tool"
 import { Filesystem } from "../util/filesystem"
-import DESCRIPTION from "./glob.txt"
+const DESCRIPTION = readFileSync(new URL("./glob.txt", import.meta.url), "utf-8")
 import { Ripgrep } from "../file/ripgrep"
 import { Instance } from "../project/instance"
 import { assertExternalDirectory } from "./external-directory"

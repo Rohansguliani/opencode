@@ -9,6 +9,7 @@ import { lazy } from "../../util/lazy"
 import { InstanceBootstrap } from "../../project/bootstrap"
 import { searchProjectMessages } from "../../session/session.sql"
 import { Database } from "../../storage/db"
+import { db } from "../../storage/simple-db"
 import { SessionID, MessageID, PartID } from "../../session/schema"
 import { streamSSE } from "hono/streaming"
 import { LLM } from "../../session/llm"
@@ -41,8 +42,8 @@ export const ProjectRoutes = lazy(() =>
         },
       }),
       async (c) => {
-        const projects = await Project.list()
-        return c.json(projects)
+        const workspaces = db.prepare('SELECT * FROM workspaces').all()
+        return c.json(workspaces)
       },
     )
     .post(
@@ -66,12 +67,17 @@ export const ProjectRoutes = lazy(() =>
       validator("json", z.object({ directory: z.string(), name: z.string().optional() })),
       async (c) => {
         const body = c.req.valid("json")
-        const { project } = await Project.fromDirectory(body.directory)
-        if (body.name && project.name !== body.name) {
-          const updated = await Project.update({ projectID: project.id, name: body.name })
-          return c.json(updated)
+        const name = body.name || body.directory.split('/').pop() || "New Workspace"
+        try {
+          const existing = db.prepare('SELECT * FROM workspaces WHERE directory = ?').get(body.directory) as any
+          if (existing) return c.json(existing)
+          
+          const id = Math.random().toString(36).substring(2, 11) // Simple ID generation
+          db.prepare('INSERT INTO workspaces (id, name, directory) VALUES (?, ?, ?)').run(id, name, body.directory)
+          return c.json({ id, name, directory: body.directory })
+        } catch (e: any) {
+          return c.json({ error: e.message }, 500)
         }
-        return c.json(project)
       },
     )
     .get(

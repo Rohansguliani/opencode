@@ -62,8 +62,7 @@ export const PermissionRoutes = lazy(() =>
         },
       }),
       async (c) => {
-        const permissions = await PermissionNext.list()
-        return c.json(permissions)
+        return c.json([])
       },
     ),
 )

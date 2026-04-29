@@ -477,6 +477,36 @@ export default function Page(props: { active?: boolean }) {
   const lastUserMessage = createMemo(() => visibleUserMessages().at(-1))
 
   createEffect(() => {
+    const id = params.id
+    if (!id) return
+    // Clear messages for new session to avoid state leak
+    if (sync.data.message[id] === undefined) {
+      sync.set("message", id, [])
+    }
+  })
+
+  createEffect(() => {
+    const id = params.id
+    if (!id) return
+    
+    const isBusy = () => {
+      if ((sync.data.session_status[id] ?? { type: "idle" as const }).type !== "idle") return true
+      return (sync.data.message[id] ?? []).some(
+        (item) => item.role === "assistant" && typeof item.time.completed !== "number",
+      )
+    }
+    
+    if (!isBusy()) return
+    
+    const timer = setInterval(() => {
+      console.log("[Polling] Fetching messages for busy session:", id)
+      void sync.session.sync(id, { force: true })
+    }, 2000)
+    
+    onCleanup(() => clearInterval(timer))
+  })
+
+  createEffect(() => {
     if (!active()) return
     const tab = activeFileTab()
     if (!tab) return

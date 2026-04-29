@@ -1,9 +1,10 @@
+import { readFileSync } from "fs"
 import z from "zod"
 import * as path from "path"
 import { Tool } from "./tool"
 import { LSP } from "../lsp"
 import { createTwoFilesPatch } from "diff"
-import DESCRIPTION from "./write.txt"
+const DESCRIPTION = readFileSync(new URL("./write.txt", import.meta.url), "utf-8")
 import { Bus } from "../bus"
 import { File } from "../file"
 import { FileWatcher } from "../file/watcher"

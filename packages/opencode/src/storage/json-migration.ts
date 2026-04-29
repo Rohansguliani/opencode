@@ -1,5 +1,5 @@
-import { Database } from "bun:sqlite"
-import { drizzle } from "drizzle-orm/bun-sqlite"
+import Database from "better-sqlite3"
+import { drizzle } from "drizzle-orm/better-sqlite3"
 import { Global } from "../global"
 import { Log } from "../util/log"
 import { ProjectTable } from "../project/project.sql"
@@ -43,7 +43,7 @@ export namespace JsonMigration {
     log.info("starting json to sqlite migration", { storageDir })
     const start = performance.now()
 
-    const db = drizzle({ client: sqlite })
+    const db = drizzle(sqlite)
 
     // Optimize SQLite for bulk inserts
     sqlite.exec("PRAGMA journal_mode = WAL")

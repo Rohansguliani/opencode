@@ -1,7 +1,8 @@
+import { readFileSync } from "fs"
 import z from "zod"
 import { Tool } from "./tool"
 import { ProviderID, ModelID } from "../provider/schema"
-import DESCRIPTION from "./batch.txt"
+const DESCRIPTION = readFileSync(new URL("./batch.txt", import.meta.url), "utf-8")
 
 const DISALLOWED = new Set(["batch"])
 const FILTERED_FROM_SUGGESTIONS = new Set(["invalid", "patch", ...DISALLOWED])

@@ -1,3 +1,4 @@
+import { readFileSync } from "fs"
 import z from "zod"
 import { text } from "node:stream/consumers"
 import { Tool } from "./tool"
@@ -5,7 +6,7 @@ import { Filesystem } from "../util/filesystem"
 import { Ripgrep } from "../file/ripgrep"
 import { Process } from "../util/process"
 
-import DESCRIPTION from "./grep.txt"
+const DESCRIPTION = readFileSync(new URL("./grep.txt", import.meta.url), "utf-8")
 import { Instance } from "../project/instance"
 import path from "path"
 import { assertExternalDirectory } from "./external-directory"

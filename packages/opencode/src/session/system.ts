@@ -1,14 +1,15 @@
+import { readFileSync } from "fs"
 import { Ripgrep } from "../file/ripgrep"
 
 import { Instance } from "../project/instance"
 
-import PROMPT_ANTHROPIC from "./prompt/anthropic.txt"
-import PROMPT_ANTHROPIC_WITHOUT_TODO from "./prompt/qwen.txt"
-import PROMPT_BEAST from "./prompt/beast.txt"
-import PROMPT_GEMINI from "./prompt/gemini.txt"
+const PROMPT_ANTHROPIC = readFileSync(new URL("./prompt/anthropic.txt", import.meta.url), "utf-8")
+const PROMPT_ANTHROPIC_WITHOUT_TODO = readFileSync(new URL("./prompt/qwen.txt", import.meta.url), "utf-8")
+const PROMPT_BEAST = readFileSync(new URL("./prompt/beast.txt", import.meta.url), "utf-8")
+const PROMPT_GEMINI = readFileSync(new URL("./prompt/gemini.txt", import.meta.url), "utf-8")
 
-import PROMPT_CODEX from "./prompt/codex_header.txt"
-import PROMPT_TRINITY from "./prompt/trinity.txt"
+const PROMPT_CODEX = readFileSync(new URL("./prompt/codex_header.txt", import.meta.url), "utf-8")
+const PROMPT_TRINITY = readFileSync(new URL("./prompt/trinity.txt", import.meta.url), "utf-8")
 import type { Provider } from "@/provider/provider"
 import type { Agent } from "@/agent/agent"
 import { PermissionNext } from "@/permission/next"

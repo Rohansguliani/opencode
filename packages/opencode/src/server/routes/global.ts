@@ -11,6 +11,7 @@ import { lazy } from "../../util/lazy"
 import { Config } from "../../config/config"
 import { errors } from "../error"
 import { WorkspaceState } from "../../control-plane/workspace-state"
+import { db } from "../../storage/simple-db"
 
 const log = Log.create({ service: "server" })
 
@@ -172,7 +173,20 @@ export const GlobalRoutes = lazy(() =>
         },
       }),
       async (c) => {
-        return c.json(WorkspaceState.get() ?? WorkspaceState.empty())
+        try {
+          const row = db.prepare('SELECT * FROM workspace_state WHERE actor = ?').get('default') as any
+          if (row) {
+            return c.json({
+              projects: JSON.parse(row.projects),
+              last_project: row.last_project,
+              page: JSON.parse(row.page),
+              time_updated: row.time_updated,
+            })
+          }
+          return c.json({ projects: [], page: { favorites: [], workspaceOrder: {}, workspaceName: {}, workspaceBranchName: {}, workspaceExpanded: {} }, time_updated: Date.now() })
+        } catch (e: any) {
+          return c.json({ error: e.message }, 500)
+        }
       },
     )
     .patch(
@@ -195,7 +209,27 @@ export const GlobalRoutes = lazy(() =>
       }),
       validator("json", WorkspaceState.Info.omit({ actor: true, time: true })),
       async (c) => {
-        return c.json(await WorkspaceState.put(c.req.valid("json")))
+        const body = c.req.valid("json")
+        const projects = JSON.stringify(body.projects || [])
+        const last_project = body.last_project || null
+        const page = JSON.stringify(body.page || {})
+        const time_updated = Date.now()
+        
+        try {
+          db.prepare(`
+            INSERT INTO workspace_state (actor, projects, last_project, page, time_updated)
+            VALUES ('default', ?, ?, ?, ?)
+            ON CONFLICT(actor) DO UPDATE SET
+              projects = excluded.projects,
+              last_project = excluded.last_project,
+              page = excluded.page,
+              time_updated = excluded.time_updated
+          `).run(projects, last_project, page, time_updated)
+          
+          return c.json({ ...body, actor: 'default', time_updated })
+        } catch (e: any) {
+          return c.json({ error: e.message }, 500)
+        }
       },
     )
     .post(

@@ -367,6 +367,7 @@ export function SessionTurn(
   const showThinking = createMemo(() => {
     if (!working() || !!error()) return false
     if (status().type === "retry") return false
+    if (assistantMessages().length > 0) return false
     if (showReasoningSummaries()) return assistantVisible() === 0
     return true
   })

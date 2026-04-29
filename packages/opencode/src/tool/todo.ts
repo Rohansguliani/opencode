@@ -1,6 +1,7 @@
+import { readFileSync } from "fs"
 import z from "zod"
 import { Tool } from "./tool"
-import DESCRIPTION_WRITE from "./todowrite.txt"
+const DESCRIPTION_WRITE = readFileSync(new URL("./todowrite.txt", import.meta.url), "utf-8")
 import { Todo } from "../session/todo"
 
 export const TodoWriteTool = Tool.define("todowrite", {

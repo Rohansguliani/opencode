@@ -1,15 +1,16 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 import { fileURLToPath } from "url"
+import { execSync } from "child_process"
+import path from "path"
+import { createClient } from "@hey-api/openapi-ts"
 
 const dir = fileURLToPath(new URL("..", import.meta.url))
 process.chdir(dir)
 
-import { $ } from "bun"
-import path from "path"
+const opencodeDir = path.resolve(dir, "../../opencode")
 
-import { createClient } from "@hey-api/openapi-ts"
-
-await $`bun dev generate > ${dir}/openapi.json`.cwd(path.resolve(dir, "../../opencode"))
+// Generate openapi.json from backend
+execSync(`npx tsx ./src/index.ts generate > ${path.join(dir, "openapi.json")}`, { cwd: opencodeDir })
 
 await createClient({
   input: "./openapi.json",
@@ -38,8 +39,18 @@ await createClient({
   ],
 })
 
-await $`bun prettier --write src/gen`
-await $`bun prettier --write src/v2`
-await $`rm -rf dist`
-await $`bun tsc`
-await $`rm openapi.json`
+try {
+  execSync(`npx prettier --write src/gen`)
+} catch (e) {
+  console.warn("Failed to run prettier on src/gen")
+}
+
+try {
+  execSync(`npx prettier --write src/v2`)
+} catch (e) {
+  console.warn("Failed to run prettier on src/v2")
+}
+
+execSync(`rm -rf dist`)
+execSync(`npx tsc`)
+execSync(`rm openapi.json`)

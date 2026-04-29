@@ -21,6 +21,7 @@ import { McpOAuthCallback } from "./oauth-callback"
 import { McpAuth } from "./auth"
 import { BusEvent } from "../bus/bus-event"
 import { Bus } from "@/bus"
+import { execSync } from "child_process"
 import open from "open"
 
 export namespace MCP {
@@ -165,17 +166,17 @@ export namespace MCP {
     const queue = [pid]
     while (queue.length > 0) {
       const current = queue.shift()!
-      const proc = Bun.spawn(["pgrep", "-P", String(current)], { stdout: "pipe", stderr: "pipe" })
-      const [code, out] = await Promise.all([proc.exited, new Response(proc.stdout).text()]).catch(
-        () => [-1, ""] as const,
-      )
-      if (code !== 0) continue
-      for (const tok of out.trim().split(/\s+/)) {
-        const cpid = parseInt(tok, 10)
-        if (!isNaN(cpid) && pids.indexOf(cpid) === -1) {
-          pids.push(cpid)
-          queue.push(cpid)
+      try {
+        const out = execSync(`pgrep -P ${current}`, { encoding: "utf-8" })
+        for (const tok of out.trim().split(/\s+/)) {
+          const cpid = parseInt(tok, 10)
+          if (!isNaN(cpid) && pids.indexOf(cpid) === -1) {
+            pids.push(cpid)
+            queue.push(cpid)
+          }
         }
+      } catch (e) {
+        // pgrep returns exit code 1 if no processes match, which throws in execSync
       }
     }
     return pids

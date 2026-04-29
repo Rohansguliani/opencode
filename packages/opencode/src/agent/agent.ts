@@ -1,3 +1,4 @@
+import { readFileSync } from "fs"
 import { Config } from "../config/config"
 import z from "zod"
 import { Provider } from "../provider/provider"
@@ -9,11 +10,11 @@ import { Truncate } from "../tool/truncation"
 import { Auth } from "../auth"
 import { ProviderTransform } from "../provider/transform"
 
-import PROMPT_GENERATE from "./generate.txt"
-import PROMPT_COMPACTION from "./prompt/compaction.txt"
-import PROMPT_EXPLORE from "./prompt/explore.txt"
-import PROMPT_SUMMARY from "./prompt/summary.txt"
-import PROMPT_TITLE from "./prompt/title.txt"
+const PROMPT_GENERATE = readFileSync(new URL("./generate.txt", import.meta.url), "utf-8")
+const PROMPT_COMPACTION = readFileSync(new URL("./prompt/compaction.txt", import.meta.url), "utf-8")
+const PROMPT_EXPLORE = readFileSync(new URL("./prompt/explore.txt", import.meta.url), "utf-8")
+const PROMPT_SUMMARY = readFileSync(new URL("./prompt/summary.txt", import.meta.url), "utf-8")
+const PROMPT_TITLE = readFileSync(new URL("./prompt/title.txt", import.meta.url), "utf-8")
 import { PermissionNext } from "@/permission/next"
 import { mergeDeep, pipe, sortBy, values } from "remeda"
 import { Global } from "@/global"

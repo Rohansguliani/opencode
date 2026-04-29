@@ -4,6 +4,9 @@ import { Log } from "../util/log"
 import * as path from "node:path"
 import { describeRoute, generateSpecs, validator, resolver, openAPIRouteHandler } from "hono-openapi"
 import { Hono } from "hono"
+import { serve } from "@hono/node-server"
+import mime from "mime-types"
+import fs from "fs"
 import { compress } from "hono/compress"
 import { cors } from "hono/cors"
 import { streamSSE } from "hono/streaming"
@@ -29,7 +32,7 @@ import { ProviderID } from "../provider/schema"
 import { WorkspaceRouterMiddleware } from "../control-plane/workspace-router-middleware"
 import { ProjectRoutes } from "./routes/project"
 import { SessionRoutes } from "./routes/session"
-import { PtyRoutes } from "./routes/pty"
+
 import { McpRoutes } from "./routes/mcp"
 import { FileRoutes } from "./routes/file"
 import { ConfigRoutes } from "./routes/config"
@@ -38,7 +41,7 @@ import { ProviderRoutes } from "./routes/provider"
 import { InstanceBootstrap } from "../project/bootstrap"
 import { NotFoundError } from "../storage/db"
 import type { ContentfulStatusCode } from "hono/utils/http-status"
-import { websocket } from "hono/bun"
+
 import { HTTPException } from "hono/http-exception"
 import { errors } from "./error"
 import { Filesystem } from "@/util/filesystem"
@@ -240,7 +243,7 @@ export namespace Server {
           },
         })
       })
-      .use(WorkspaceRouterMiddleware)
+      // .use(WorkspaceRouterMiddleware)
       .get(
         "/doc",
         openAPIRouteHandler(app, {
@@ -264,7 +267,7 @@ export namespace Server {
         ),
       )
       .route("/project", ProjectRoutes())
-      .route("/pty", PtyRoutes())
+      // .route("/pty", PtyRoutes())
       .route("/config", ConfigRoutes())
       .route("/experimental", ExperimentalRoutes())
       .route("/session", SessionRoutes())
@@ -586,12 +589,14 @@ export namespace Server {
           const fullPath = path.resolve(appDistDir, "." + filePath)
 
           if (fullPath.startsWith(appDistDir)) {
-            const file = Bun.file(fullPath)
-            if (await file.exists()) {
-              const response = new Response(file)
+            if (fs.existsSync(fullPath)) {
+              const content = fs.readFileSync(fullPath)
+              const contentType = mime.lookup(fullPath) || "application/octet-stream"
+              const response = new Response(content)
+              response.headers.set("Content-Type", contentType)
               response.headers.set(
                 "Content-Security-Policy",
-                "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; media-src 'self' data:; connect-src 'self' data:",
+                "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; media-src 'self' data:; connect-src 'self' data: http://localhost:* http://127.0.0.1:*",
               )
               
               if (reqPath.startsWith("/assets/")) {
@@ -605,12 +610,14 @@ export namespace Server {
           }
 
           if (!reqPath.includes(".")) {
-            const indexFile = Bun.file(path.resolve(appDistDir, "index.html"))
-            if (await indexFile.exists()) {
-              const response = new Response(indexFile)
+            const indexPath = path.resolve(appDistDir, "index.html")
+            if (fs.existsSync(indexPath)) {
+              const content = fs.readFileSync(indexPath)
+              const response = new Response(content)
+              response.headers.set("Content-Type", "text/html")
               response.headers.set(
                 "Content-Security-Policy",
-                "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; media-src 'self' data:; connect-src 'self' data:",
+                "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; media-src 'self' data:; connect-src 'self' data: http://localhost:* http://127.0.0.1:*",
               )
               return response
             }
@@ -661,20 +668,13 @@ export namespace Server {
   }) {
     url = new URL(`http://${opts.hostname}:${opts.port}`)
     const app = createApp(opts)
-    const args = {
-      hostname: opts.hostname,
-      idleTimeout: 0,
+    const server = serve({
       fetch: app.fetch,
-      websocket: websocket,
-    } as const
-    const tryServe = (port: number) => {
-      try {
-        return Bun.serve({ ...args, port })
-      } catch {
-        return undefined
-      }
-    }
-    const server = opts.port === 0 ? (tryServe(4096) ?? tryServe(0)) : tryServe(opts.port)
+      port: opts.port === 0 ? 4096 : opts.port,
+      hostname: opts.hostname,
+    }, (info) => {
+      log.info("server listening", { port: info.port })
+    })
     if (!server) throw new Error(`Failed to start server on port ${opts.port}`)
 
     const shouldPublishMDNS =
@@ -689,10 +689,11 @@ export namespace Server {
       log.warn("mDNS enabled but hostname is loopback; skipping mDNS publish")
     }
 
-    const originalStop = server.stop.bind(server)
+    const originalClose = server.close.bind(server)
+    // @ts-ignore
     server.stop = async (closeActiveConnections?: boolean) => {
       if (shouldPublishMDNS) MDNS.unpublish()
-      return originalStop(closeActiveConnections)
+      return new Promise((resolve) => originalClose(resolve))
     }
 
     return server

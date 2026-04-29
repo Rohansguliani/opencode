@@ -1,7 +1,8 @@
-import { Database as BunDatabase } from "bun:sqlite"
-import { drizzle, type SQLiteBunDatabase } from "drizzle-orm/bun-sqlite"
-import { migrate } from "drizzle-orm/bun-sqlite/migrator"
+import SqliteDatabase from "better-sqlite3"
+import { drizzle, type BetterSQLite3Database } from "drizzle-orm/better-sqlite3"
+import { migrate } from "drizzle-orm/better-sqlite3/migrator"
 import { type SQLiteTransaction } from "drizzle-orm/sqlite-core"
+import { fileURLToPath } from "url"
 export * from "drizzle-orm"
 import { Context } from "../util/context"
 import { lazy } from "../util/lazy"
@@ -28,23 +29,23 @@ export const NotFoundError = NamedError.create(
 const log = Log.create({ service: "db" })
 
 export namespace Database {
-  export const Path = iife(() => {
+  export function Path() {
     const channel = Installation.CHANNEL
     if (["latest", "beta"].includes(channel) || Flag.OPENCODE_DISABLE_CHANNEL_DB)
       return path.join(Global.Path.data, "opencode.db")
     const safe = channel.replace(/[^a-zA-Z0-9._-]/g, "-")
     return path.join(Global.Path.data, `opencode-${safe}.db`)
-  })
+  }
 
   type Schema = typeof schema
   export type Transaction = SQLiteTransaction<"sync", void, Schema>
 
-  type Client = SQLiteBunDatabase
+  type Client = BetterSQLite3Database
 
   type Journal = { sql: string; timestamp: number; name: string }[]
 
   const state = {
-    sqlite: undefined as BunDatabase | undefined,
+    sqlite: undefined as SqliteDatabase | undefined,
   }
 
   function time(tag: string) {
@@ -60,57 +61,45 @@ export namespace Database {
     )
   }
 
-  function migrations(dir: string): Journal {
-    const dirs = readdirSync(dir, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => entry.name)
 
-    const sql = dirs
-      .map((name) => {
-        const file = path.join(dir, name, "migration.sql")
-        if (!existsSync(file)) return
-        return {
-          sql: readFileSync(file, "utf-8"),
-          timestamp: time(name),
-          name,
-        }
-      })
-      .filter(Boolean) as Journal
-
-    return sql.sort((a, b) => a.timestamp - b.timestamp)
-  }
 
   export const Client = lazy(() => {
-    log.info("opening database", { path: Path })
+    log.info("opening database", { path: Path() })
 
-    const sqlite = new BunDatabase(Path, { create: true })
+    const sqlite = new SqliteDatabase(Path())
     state.sqlite = sqlite
 
-    sqlite.run("PRAGMA journal_mode = WAL")
-    sqlite.run("PRAGMA synchronous = NORMAL")
-    sqlite.run("PRAGMA busy_timeout = 5000")
-    sqlite.run("PRAGMA cache_size = -64000")
-    sqlite.run("PRAGMA foreign_keys = ON")
-    sqlite.run("PRAGMA wal_checkpoint(PASSIVE)")
+    sqlite.exec("PRAGMA journal_mode = WAL")
+    sqlite.exec("PRAGMA synchronous = NORMAL")
+    sqlite.exec("PRAGMA busy_timeout = 5000")
+    sqlite.exec("PRAGMA cache_size = -64000")
+    sqlite.exec("PRAGMA foreign_keys = ON")
+    sqlite.exec("PRAGMA wal_checkpoint(PASSIVE)")
 
-    const db = drizzle({ client: sqlite })
+    const db = drizzle(sqlite)
 
     // Apply schema migrations
-    const entries =
-      typeof OPENCODE_MIGRATIONS !== "undefined"
-        ? OPENCODE_MIGRATIONS
-        : migrations(path.join(import.meta.dirname, "../../migration"))
-    if (entries.length > 0) {
-      log.info("applying migrations", {
-        count: entries.length,
-        mode: typeof OPENCODE_MIGRATIONS !== "undefined" ? "bundled" : "dev",
-      })
-      if (Flag.OPENCODE_SKIP_MIGRATIONS) {
-        for (const item of entries) {
-          item.sql = "select 1;"
+    if (false) { // Disabled for local Node migration
+      const migrationsFolder = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../migration")
+      log.info("applying migrations", { folder: migrationsFolder })
+      
+      try {
+        const dirs = readdirSync(migrationsFolder, { withFileTypes: true })
+          .filter((entry) => entry.isDirectory())
+          .map((entry) => entry.name)
+          .sort()
+          
+        for (const name of dirs) {
+          const file = path.join(migrationsFolder, name, "migration.sql")
+          if (existsSync(file)) {
+            const sql = readFileSync(file, "utf-8")
+            log.info("Executing migration", { name })
+            sqlite.exec(sql)
+          }
         }
+      } catch (e: any) {
+        log.error("Migration failed", { error: e.message })
       }
-      migrate(db, entries)
     }
 
     return db

@@ -1,7 +1,8 @@
+import { readFileSync } from "fs"
 import z from "zod"
 import { Tool } from "./tool"
 import { EditTool } from "./edit"
-import DESCRIPTION from "./multiedit.txt"
+const DESCRIPTION = readFileSync(new URL("./multiedit.txt", import.meta.url), "utf-8")
 import path from "path"
 import { Instance } from "../project/instance"
 

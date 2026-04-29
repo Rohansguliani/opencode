@@ -3,6 +3,7 @@ import { Effect, Layer, Option, Schema, ServiceMap } from "effect"
 
 import { Database } from "@/storage/db"
 import { AccountStateTable, AccountTable } from "./account.sql"
+import { db as simpleDb } from "../storage/simple-db"
 import { AccessToken, Account, AccountID, AccountRepoError, OrgID, RefreshToken } from "./schema"
 
 export type AccountRow = (typeof AccountTable)["$inferSelect"]
@@ -55,7 +56,7 @@ export class AccountRepo extends ServiceMap.Service<AccountRepo, AccountRepo.Ser
         })
 
       const current = (db: DbClient) => {
-        const state = db.select().from(AccountStateTable).where(eq(AccountStateTable.id, ACCOUNT_STATE_ID)).get()
+        const state = simpleDb.prepare('SELECT * FROM account_state WHERE id = ?').get(ACCOUNT_STATE_ID) as any
         if (!state?.active_account_id) return
         const account = db.select().from(AccountTable).where(eq(AccountTable.id, state.active_account_id)).get()
         if (!account) return

@@ -6,7 +6,7 @@ export namespace PackageRegistry {
   const log = Log.create({ service: "bun" })
 
   function which() {
-    return process.execPath
+    return "npm"
   }
 
   export async function info(pkg: string, field: string, cwd?: string): Promise<string | null> {

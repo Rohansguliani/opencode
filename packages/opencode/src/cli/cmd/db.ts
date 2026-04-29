@@ -1,7 +1,7 @@
 import type { Argv } from "yargs"
 import { spawn } from "child_process"
 import { Database } from "../../storage/db"
-import { Database as BunDatabase } from "bun:sqlite"
+import SqliteDatabase from "better-sqlite3"
 import { UI } from "../ui"
 import { cmd } from "./cmd"
 import { JsonMigration } from "../../storage/json-migration"
@@ -26,9 +26,9 @@ const QueryCommand = cmd({
   handler: async (args: { query?: string; format: string }) => {
     const query = args.query as string | undefined
     if (query) {
-      const db = new BunDatabase(Database.Path, { readonly: true })
+      const db = new SqliteDatabase(Database.Path, { readonly: true })
       try {
-        const result = db.query(query).all() as Record<string, unknown>[]
+        const result = db.prepare(query).all() as Record<string, unknown>[]
         if (args.format === "json") {
           console.log(JSON.stringify(result, null, 2))
         } else if (result.length > 0) {
@@ -64,7 +64,7 @@ const MigrateCommand = cmd({
   command: "migrate",
   describe: "migrate JSON data to SQLite (merges with existing data)",
   handler: async () => {
-    const sqlite = new BunDatabase(Database.Path)
+    const sqlite = new SqliteDatabase(Database.Path)
     const tty = process.stderr.isTTY
     const width = 36
     const orange = "\x1b[38;5;214m"

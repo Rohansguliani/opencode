@@ -61,7 +61,7 @@ export namespace Flag {
   export const OPENCODE_EXPERIMENTAL_MARKDOWN = !falsy("OPENCODE_EXPERIMENTAL_MARKDOWN")
   export const OPENCODE_MODELS_URL = process.env["OPENCODE_MODELS_URL"]
   export const OPENCODE_MODELS_PATH = process.env["OPENCODE_MODELS_PATH"]
-  export const OPENCODE_DISABLE_CHANNEL_DB = truthy("OPENCODE_DISABLE_CHANNEL_DB")
+  export declare const OPENCODE_DISABLE_CHANNEL_DB: boolean
   export const OPENCODE_SKIP_MIGRATIONS = truthy("OPENCODE_SKIP_MIGRATIONS")
   export const OPENCODE_STRICT_CONFIG_DEPS = truthy("OPENCODE_STRICT_CONFIG_DEPS")
 
@@ -112,6 +112,14 @@ Object.defineProperty(Flag, "OPENCODE_CONFIG_DIR", {
 Object.defineProperty(Flag, "OPENCODE_CLIENT", {
   get() {
     return process.env["OPENCODE_CLIENT"] ?? "cli"
+  },
+  enumerable: true,
+  configurable: false,
+})
+
+Object.defineProperty(Flag, "OPENCODE_DISABLE_CHANNEL_DB", {
+  get() {
+    return truthy("OPENCODE_DISABLE_CHANNEL_DB")
   },
   enumerable: true,
   configurable: false,

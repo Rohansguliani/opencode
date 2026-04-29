@@ -101,13 +101,13 @@ export function applyDirectoryEvent(input: {
     }
     case "session.created": {
       const info = (event.properties as { info: Session }).info
-      const result = Binary.search(input.store.session, info.id, (s) => s.id)
-      if (result.found) {
-        input.setStore("session", result.index, reconcile(info))
+      const sessions = input.store.session || []
+      const index = sessions.findIndex((s) => s.id === info.id)
+      if (index !== -1) {
+        input.setStore("session", index, reconcile(info))
         break
       }
-      const next = input.store.session.slice()
-      next.splice(result.index, 0, info)
+      const next = [...sessions, info].sort((a, b) => (b.time.created || 0) - (a.time.created || 0))
       const trimmed = trimSessions(next, { limit: input.store.limit, permission: input.store.permission })
       input.setStore("session", reconcile(trimmed, { key: "id" }))
       cleanupDroppedSessionCaches(input.store, input.setStore, trimmed, input.setSessionTodo)
@@ -116,13 +116,14 @@ export function applyDirectoryEvent(input: {
     }
     case "session.updated": {
       const info = (event.properties as { info: Session }).info
-      const result = Binary.search(input.store.session, info.id, (s) => s.id)
+      const sessions = input.store.session || []
+      const index = sessions.findIndex((s) => s.id === info.id)
       if (info.time.archived) {
-        if (result.found) {
+        if (index !== -1) {
           input.setStore(
             "session",
             produce((draft) => {
-              draft.splice(result.index, 1)
+              draft.splice(index, 1)
             }),
           )
         }
@@ -131,12 +132,11 @@ export function applyDirectoryEvent(input: {
         input.setStore("sessionTotal", (value) => Math.max(0, value - 1))
         break
       }
-      if (result.found) {
-        input.setStore("session", result.index, reconcile(info))
+      if (index !== -1) {
+        input.setStore("session", index, reconcile(info))
         break
       }
-      const next = input.store.session.slice()
-      next.splice(result.index, 0, info)
+      const next = [...sessions, info].sort((a, b) => (b.time.created || 0) - (a.time.created || 0))
       const trimmed = trimSessions(next, { limit: input.store.limit, permission: input.store.permission })
       input.setStore("session", reconcile(trimmed, { key: "id" }))
       cleanupDroppedSessionCaches(input.store, input.setStore, trimmed, input.setSessionTodo)
@@ -144,12 +144,13 @@ export function applyDirectoryEvent(input: {
     }
     case "session.deleted": {
       const info = (event.properties as { info: Session }).info
-      const result = Binary.search(input.store.session, info.id, (s) => s.id)
-      if (result.found) {
+      const sessions = input.store.session || []
+      const index = sessions.findIndex((s) => s.id === info.id)
+      if (index !== -1) {
         input.setStore(
           "session",
           produce((draft) => {
-            draft.splice(result.index, 1)
+            draft.splice(index, 1)
           }),
         )
       }
@@ -176,23 +177,14 @@ export function applyDirectoryEvent(input: {
     }
     case "message.updated": {
       const info = (event.properties as { info: Message }).info
-      const messages = input.store.message[info.sessionID]
-      if (!messages) {
-        input.setStore("message", info.sessionID, [info])
-        break
+      const messages = input.store.message[info.sessionID] || []
+      
+      const index = messages.findIndex((m) => m.id === info.id)
+      if (index !== -1) {
+        input.setStore("message", info.sessionID, index, reconcile(info))
+      } else {
+        input.setStore("message", info.sessionID, [...messages, info])
       }
-      const result = Binary.search(messages, info.id, (m) => m.id)
-      if (result.found) {
-        input.setStore("message", info.sessionID, result.index, reconcile(info))
-        break
-      }
-      input.setStore(
-        "message",
-        info.sessionID,
-        produce((draft) => {
-          draft.splice(result.index, 0, info)
-        }),
-      )
       break
     }
     case "message.removed": {
@@ -201,8 +193,8 @@ export function applyDirectoryEvent(input: {
         produce((draft) => {
           const messages = draft.message[props.sessionID]
           if (messages) {
-            const result = Binary.search(messages, props.messageID, (m) => m.id)
-            if (result.found) messages.splice(result.index, 1)
+            const index = messages.findIndex((m) => m.id === props.messageID)
+            if (index !== -1) messages.splice(index, 1)
           }
           delete draft.part[props.messageID]
         }),
@@ -211,23 +203,14 @@ export function applyDirectoryEvent(input: {
     }
     case "message.part.updated": {
       const part = (event.properties as { part: Part }).part
-      const parts = input.store.part[part.messageID]
-      if (!parts) {
-        input.setStore("part", part.messageID, [part])
-        break
+      const parts = input.store.part[part.messageID] || []
+      
+      const index = parts.findIndex((p) => p.id === part.id)
+      if (index !== -1) {
+        input.setStore("part", part.messageID, index, reconcile(part))
+      } else {
+        input.setStore("part", part.messageID, [...parts, part])
       }
-      const result = Binary.search(parts, part.id, (p) => p.id)
-      if (result.found) {
-        input.setStore("part", part.messageID, result.index, reconcile(part))
-        break
-      }
-      input.setStore(
-        "part",
-        part.messageID,
-        produce((draft) => {
-          draft.splice(result.index, 0, part)
-        }),
-      )
       break
     }
     case "message.part.removed": {
@@ -253,13 +236,13 @@ export function applyDirectoryEvent(input: {
       const props = event.properties as { messageID: string; partID: string; field: string; delta: string }
       const parts = input.store.part[props.messageID]
       if (!parts) break
-      const result = Binary.search(parts, props.partID, (p) => p.id)
-      if (!result.found) break
+      const index = parts.findIndex((p) => p.id === props.partID)
+      if (index === -1) break
       input.setStore(
         "part",
         props.messageID,
         produce((draft) => {
-          const part = draft[result.index]
+          const part = draft[index]
           const field = props.field as keyof typeof part
           const existing = part[field] as string | undefined
           ;(part[field] as string) = (existing ?? "") + props.delta
@@ -277,75 +260,59 @@ export function applyDirectoryEvent(input: {
     }
     case "permission.asked": {
       const permission = event.properties as PermissionRequest
-      const permissions = input.store.permission[permission.sessionID]
-      if (!permissions) {
-        input.setStore("permission", permission.sessionID, [permission])
-        break
+      const permissions = input.store.permission[permission.sessionID] || []
+      
+      const index = permissions.findIndex((p) => p.id === permission.id)
+      if (index !== -1) {
+        input.setStore("permission", permission.sessionID, index, reconcile(permission))
+      } else {
+        input.setStore("permission", permission.sessionID, [...permissions, permission])
       }
-      const result = Binary.search(permissions, permission.id, (p) => p.id)
-      if (result.found) {
-        input.setStore("permission", permission.sessionID, result.index, reconcile(permission))
-        break
-      }
-      input.setStore(
-        "permission",
-        permission.sessionID,
-        produce((draft) => {
-          draft.splice(result.index, 0, permission)
-        }),
-      )
       break
     }
     case "permission.replied": {
       const props = event.properties as { sessionID: string; requestID: string }
-      const permissions = input.store.permission[props.sessionID]
-      if (!permissions) break
-      const result = Binary.search(permissions, props.requestID, (p) => p.id)
-      if (!result.found) break
-      input.setStore(
-        "permission",
-        props.sessionID,
-        produce((draft) => {
-          draft.splice(result.index, 1)
-        }),
-      )
+      const permissions = input.store.permission[props.sessionID] || []
+      
+      const index = permissions.findIndex((p) => p.id === props.requestID)
+      if (index !== -1) {
+        input.setStore(
+          "permission",
+          props.sessionID,
+          produce((draft) => {
+            draft.splice(index, 1)
+          }),
+        )
+      }
       break
     }
     case "question.asked": {
       const question = event.properties as QuestionRequest
-      const questions = input.store.question[question.sessionID]
-      if (!questions) {
-        input.setStore("question", question.sessionID, [question])
-        break
+      const questions = input.store.question[question.sessionID] || []
+      
+      const index = questions.findIndex((q) => q.id === question.id)
+      if (index !== -1) {
+        input.setStore("question", question.sessionID, index, reconcile(question))
+      } else {
+        input.setStore("question", question.sessionID, [...questions, question])
       }
-      const result = Binary.search(questions, question.id, (q) => q.id)
-      if (result.found) {
-        input.setStore("question", question.sessionID, result.index, reconcile(question))
-        break
-      }
-      input.setStore(
-        "question",
-        question.sessionID,
-        produce((draft) => {
-          draft.splice(result.index, 0, question)
-        }),
-      )
       break
     }
     case "question.replied":
     case "question.rejected": {
       const props = event.properties as { sessionID: string; requestID: string }
-      const questions = input.store.question[props.sessionID]
-      if (!questions) break
-      const result = Binary.search(questions, props.requestID, (q) => q.id)
-      if (!result.found) break
-      input.setStore(
-        "question",
-        props.sessionID,
-        produce((draft) => {
-          draft.splice(result.index, 1)
-        }),
-      )
+      const questions = input.store.question[props.sessionID] || []
+      
+      const index = questions.findIndex((q) => q.id === props.requestID)
+      if (index !== -1) {
+        input.setStore(
+          "question",
+          props.sessionID,
+          produce((draft) => {
+            draft.splice(index, 1)
+          }),
+        )
+      }
       break
     }
     case "lsp.updated": {

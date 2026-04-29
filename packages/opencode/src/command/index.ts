@@ -1,11 +1,12 @@
+import { readFileSync } from "fs"
 import { BusEvent } from "@/bus/bus-event"
 import { SessionID, MessageID } from "@/session/schema"
 import z from "zod"
 import { Config } from "../config/config"
 import { Instance } from "../project/instance"
 import { Identifier } from "../id/id"
-import PROMPT_INITIALIZE from "./template/initialize.txt"
-import PROMPT_REVIEW from "./template/review.txt"
+const PROMPT_INITIALIZE = readFileSync(new URL("./template/initialize.txt", import.meta.url), "utf-8")
+const PROMPT_REVIEW = readFileSync(new URL("./template/review.txt", import.meta.url), "utf-8")
 import { MCP } from "../mcp"
 import { Skill } from "../skill"
 

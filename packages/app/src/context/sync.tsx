@@ -505,24 +505,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
           const [store, setStore] = globalSync.child(directory)
           const key = keyFor(directory, sessionID)
 
-          if (store.message[sessionID] === undefined) {
-            try {
-              const cachedStr = localStorage.getItem(`opencode.recent.${sessionID}`)
-              if (cachedStr) {
-                const parsed = JSON.parse(cachedStr)
-                if (Array.isArray(parsed.message)) {
-                  batch(() => {
-                    setStore("message", sessionID, parsed.message)
-                    if (Array.isArray(parsed.part)) {
-                      for (const p of parsed.part) {
-                        setStore("part", p.id, p.part)
-                      }
-                    }
-                  })
-                }
-              }
-            } catch {}
-          }
+          // Removed localStorage cache to force fetch on refresh
 
           touch(directory, setStore, sessionID)
 

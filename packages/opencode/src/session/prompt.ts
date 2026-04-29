@@ -1,3 +1,4 @@
+import { readFileSync } from "fs"
 import path from "path"
 import os from "os"
 import fs from "fs/promises"
@@ -19,9 +20,9 @@ import { ProviderTransform } from "../provider/transform"
 import { SystemPrompt } from "./system"
 import { InstructionPrompt } from "./instruction"
 import { Plugin } from "../plugin"
-import PROMPT_PLAN from "../session/prompt/plan.txt"
-import BUILD_SWITCH from "../session/prompt/build-switch.txt"
-import MAX_STEPS from "../session/prompt/max-steps.txt"
+const PROMPT_PLAN = readFileSync(new URL("../session/prompt/plan.txt", import.meta.url), "utf-8")
+const BUILD_SWITCH = readFileSync(new URL("../session/prompt/build-switch.txt", import.meta.url), "utf-8")
+const MAX_STEPS = readFileSync(new URL("../session/prompt/max-steps.txt", import.meta.url), "utf-8")
 import { defer } from "../util/defer"
 import { ToolRegistry } from "../tool/registry"
 import { MCP } from "../mcp"
@@ -30,9 +31,11 @@ import { ReadTool } from "../tool/read"
 import { FileTime } from "../file/time"
 import { Flag } from "../flag/flag"
 import { ulid } from "ulid"
-import { spawn } from "child_process"
+import { spawn, exec } from "child_process"
 import { Command } from "../command"
-import { $ } from "bun"
+import { promisify } from "util"
+
+const execAsync = promisify(exec)
 import { pathToFileURL, fileURLToPath } from "url"
 import { ConfigMarkdown } from "../config/markdown"
 import { SessionSummary } from "./summary"
@@ -2163,9 +2166,10 @@ NOTE: At any point in time through this workflow you should feel free to ask the
       const results = await Promise.all(
         shell.map(async ([, cmd]) => {
           try {
-            return await $`${{ raw: cmd }}`.quiet().nothrow().text()
-          } catch (error) {
-            return `Error executing command: ${error instanceof Error ? error.message : String(error)}`
+            const { stdout } = await execAsync(cmd)
+            return stdout
+          } catch (error: any) {
+            return error.stdout || `Error executing command: ${error instanceof Error ? error.message : String(error)}`
           }
         }),
       )

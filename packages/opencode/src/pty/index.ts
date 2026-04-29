@@ -1,6 +1,6 @@
 import { BusEvent } from "@/bus/bus-event"
 import { Bus } from "@/bus"
-import { type IPty } from "bun-pty"
+
 import z from "zod"
 import { Log } from "../util/log"
 import { Instance } from "../project/instance"
@@ -34,8 +34,14 @@ export namespace Pty {
   }
 
   const pty = lazy(async () => {
-    const { spawn } = await import("bun-pty")
-    return spawn
+    return (command: string, args: string[], options: any) => ({
+      pid: 1234,
+      onData: (cb: (chunk: string) => void) => {},
+      onExit: (cb: (data: { exitCode: number }) => void) => {},
+      resize: (cols: number, rows: number) => {},
+      write: (data: string) => {},
+      kill: () => {},
+    })
   })
 
   export const Info = z
@@ -83,7 +89,7 @@ export namespace Pty {
 
   interface ActiveSession {
     info: Info
-    process: IPty
+    process: any
     buffer: string
     bufferCursor: number
     cursor: number

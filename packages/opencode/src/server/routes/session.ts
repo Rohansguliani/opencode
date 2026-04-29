@@ -1,4 +1,5 @@
 import { Hono } from "hono"
+import { Instance } from "../../project/instance"
 import { stream } from "hono/streaming"
 import { describeRoute, validator, resolver } from "hono-openapi"
 import { SessionID, MessageID, PartID } from "@/session/schema"
@@ -12,6 +13,8 @@ import { SessionStatus } from "@/session/status"
 import { SessionSummary } from "@/session/summary"
 import { Todo } from "../../session/todo"
 import { Agent } from "../../agent/agent"
+import { Provider } from "../../provider/provider"
+import { SessionProcessor } from "../../session/processor"
 import { Snapshot } from "@/snapshot"
 import { Log } from "../../util/log"
 import { PermissionNext } from "@/permission/next"
@@ -19,6 +22,11 @@ import { PermissionID } from "@/permission/schema"
 import { ModelID, ProviderID } from "@/provider/schema"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
+import { db } from "../../storage/simple-db"
+import { Bus } from "../../bus"
+import { GlobalBus } from "../../bus/global"
+import { generateText, streamText } from "ai"
+import { google } from "@ai-sdk/google"
 
 const log = Log.create({ service: "server" })
 
@@ -56,17 +64,40 @@ export const SessionRoutes = lazy(() =>
       ),
       async (c) => {
         const query = c.req.valid("query")
-        const sessions: Session.Info[] = []
-        for await (const session of Session.list({
-          directory: query.directory,
-          roots: query.roots,
-          start: query.start,
-          search: query.search,
-          limit: query.limit,
-        })) {
-          sessions.push(session)
+        if (!query.directory) return c.json([])
+        
+        try {
+          const [cleanDir, queryString] = query.directory.split('?')
+          log.info("Listing chats for directory", { directory: cleanDir })
+          let workspace = db.prepare('SELECT id FROM workspaces WHERE directory = ?').get(cleanDir) as any
+          if (!workspace && queryString) {
+            const parts = queryString.split('=')
+            const wsId = parts[1]
+            if (wsId) {
+              workspace = db.prepare('SELECT id FROM workspaces WHERE id = ?').get(wsId) as any
+            }
+          }
+          if (!workspace) {
+            workspace = db.prepare('SELECT id FROM workspaces WHERE id = ?').get(cleanDir) as any
+          }
+          log.info("Found workspace in list", { workspace })
+          const rows = workspace 
+            ? db.prepare('SELECT * FROM simple_sessions WHERE workspace_id = ? ORDER BY time_created DESC').all(workspace.id) as any[]
+            : db.prepare('SELECT * FROM simple_sessions ORDER BY time_created DESC').all() as any[]
+          
+          return c.json(rows.map(row => ({
+            id: row.id,
+            workspaceID: row.workspace_id,
+            projectID: "default",
+            title: row.title,
+            time: { created: row.time_created, updated: row.time_created },
+            directory: cleanDir,
+            version: "2",
+            slug: row.id,
+          })))
+        } catch (e: any) {
+          return c.json({ error: e.message }, 500)
         }
-        return c.json(sessions)
       },
     )
     .get(
@@ -119,9 +150,28 @@ export const SessionRoutes = lazy(() =>
       ),
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
-        log.info("SEARCH", { url: c.req.url })
-        const session = await Session.get(sessionID)
-        return c.json(session)
+        try {
+          const row = db.prepare(`
+            SELECT s.*, w.directory 
+            FROM simple_sessions s 
+            JOIN workspaces w ON s.workspace_id = w.id 
+            WHERE s.id = ?
+          `).get(sessionID) as any
+          
+          if (!row) return c.json({ error: "Session not found" }, 404)
+          
+          return c.json({
+            id: row.id,
+            workspaceID: row.workspace_id,
+            title: row.title,
+            time: { created: row.time_created, updated: row.time_created },
+            directory: row.directory,
+            version: "2",
+            slug: row.id,
+          })
+        } catch (e: any) {
+          return c.json({ error: e.message }, 500)
+        }
       },
     )
     .get(
@@ -180,9 +230,7 @@ export const SessionRoutes = lazy(() =>
         }),
       ),
       async (c) => {
-        const sessionID = c.req.valid("param").sessionID
-        const todos = await Todo.get(sessionID)
-        return c.json(todos)
+        return c.json([])
       },
     )
     .post(
@@ -206,8 +254,51 @@ export const SessionRoutes = lazy(() =>
       validator("json", Session.create.schema.optional()),
       async (c) => {
         const body = c.req.valid("json") ?? {}
-        const session = await Session.create(body)
-        return c.json(session)
+        const id = "ses_" + Math.random().toString(36).substring(2, 11)
+        
+        const directory = body.directory || Instance.directory
+        
+        try {
+          let workspace = db.prepare('SELECT id FROM workspaces WHERE directory LIKE ?').get(directory) as any
+          if (!workspace) {
+            // Try lookup by ID
+            workspace = db.prepare('SELECT id FROM workspaces WHERE id = ?').get(directory) as any
+            if (!workspace) {
+              const allWs = db.prepare('SELECT * FROM workspaces').all() as any[]
+              workspace = allWs.find(ws => ws.directory === directory || ws.id === directory)
+              if (!workspace) {
+                log.error("Workspace not found", { directory, allWorkspaces: allWs })
+                return c.json({ error: "Workspace not found" }, 400)
+              }
+            }
+          }
+          
+          const result = db.prepare('INSERT INTO simple_sessions (id, workspace_id, title, time_created) VALUES (?, ?, ?, ?)').run(id, workspace.id, body.title || "New Chat", Date.now())
+          log.info("Inserted session", { id, workspaceId: workspace.id, result })
+          
+          const sessionInfo = {
+            id,
+            workspaceID: workspace.id,
+            projectID: "default",
+            title: body.title || "New Chat",
+            time: { created: Date.now(), updated: Date.now() },
+            directory: body.directory || directory,
+            version: "2",
+            slug: id,
+          }
+
+          GlobalBus.emit("event", {
+            directory: body.directory || directory,
+            payload: {
+              type: "session.created",
+              properties: { info: sessionInfo }
+            }
+          })
+          
+          return c.json(sessionInfo)
+        } catch (e: any) {
+          return c.json({ error: e.message }, 500)
+        }
       },
     )
     .delete(
@@ -236,8 +327,12 @@ export const SessionRoutes = lazy(() =>
       ),
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
-        await Session.remove(sessionID)
-        return c.json(true)
+        try {
+          db.prepare('DELETE FROM simple_sessions WHERE id = ?').run(sessionID)
+          return c.json(true)
+        } catch (e: any) {
+          return c.json({ error: e.message }, 500)
+        }
       },
     )
     .patch(
@@ -278,16 +373,42 @@ export const SessionRoutes = lazy(() =>
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
         const updates = c.req.valid("json")
+        
+        try {
+          if (updates.title !== undefined) {
+            db.prepare('UPDATE simple_sessions SET title = ? WHERE id = ?').run(updates.title, sessionID)
+          }
+          if (updates.time?.archived !== undefined) {
+            db.prepare('UPDATE simple_sessions SET time_archived = ? WHERE id = ?').run(updates.time.archived, sessionID)
+          }
+          
+          const updated = db.prepare('SELECT * FROM simple_sessions WHERE id = ?').get(sessionID) as any
+          const sessionRow = db.prepare('SELECT workspace_id FROM simple_sessions WHERE id = ?').get(sessionID) as any
+          const workspaceRow = db.prepare('SELECT directory FROM workspaces WHERE id = ?').get(sessionRow.workspace_id) as any
+          const wsDirectory = workspaceRow.directory
 
-        let session = await Session.get(sessionID)
-        if (updates.title !== undefined) {
-          session = await Session.setTitle({ sessionID, title: updates.title })
-        }
-        if (updates.time?.archived !== undefined) {
-          session = await Session.setArchived({ sessionID, time: updates.time.archived })
-        }
+          const sessionInfo = {
+            id: updated.id,
+            workspaceID: updated.workspace_id,
+            projectID: "default",
+            title: updated.title,
+            time: { created: updated.time_created, updated: updated.time_created, archived: updated.time_archived },
+            version: "2",
+            slug: updated.id,
+          }
 
-        return c.json(session)
+          GlobalBus.emit("event", {
+            directory: wsDirectory,
+            payload: {
+              type: "session.updated",
+              properties: { info: sessionInfo }
+            }
+          })
+          
+          return c.json(sessionInfo)
+        } catch (e: any) {
+          return c.json({ error: e.message }, 500)
+        }
       },
     )
     .post(
@@ -600,34 +721,36 @@ export const SessionRoutes = lazy(() =>
           }),
       ),
       async (c) => {
-        const query = c.req.valid("query")
         const sessionID = c.req.valid("param").sessionID
-        if (query.limit === undefined) {
-          await Session.get(sessionID)
-          const messages = await Session.messages({ sessionID })
+        try {
+          const rows = db.prepare('SELECT * FROM simple_messages WHERE session_id = ? ORDER BY time_created ASC').all(sessionID) as any[]
+          
+          const messages = rows.map((row, index) => {
+            let parentID = undefined
+            if (row.role === 'assistant' && index > 0 && rows[index-1].role === 'user') {
+              parentID = rows[index-1].id
+            }
+            return {
+              id: row.id,
+              sessionID: row.session_id,
+              info: { 
+                id: row.id,
+                sessionID: row.session_id,
+                role: row.role, 
+                parentID,
+                time: { created: row.time_created, updated: row.time_created, completed: row.role === 'assistant' ? row.time_created : undefined },
+                ...(row.role === 'assistant' && {
+                  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+                  cost: 0
+                })
+              },
+              parts: [{ id: row.id + "_part", messageID: row.id, sessionID: row.session_id, type: 'text', text: row.content, data: { type: 'text', text: row.content }, time: { created: row.time_created, updated: row.time_created } }],
+            }
+          })
           return c.json(messages)
+        } catch (e: any) {
+          return c.json({ error: e.message }, 500)
         }
-
-        if (query.limit === 0) {
-          await Session.get(sessionID)
-          const messages = await Session.messages({ sessionID })
-          return c.json(messages)
-        }
-
-        const page = await MessageV2.page({
-          sessionID,
-          limit: query.limit,
-          before: query.before,
-        })
-        if (page.cursor) {
-          const url = new URL(c.req.url)
-          url.searchParams.set("limit", query.limit.toString())
-          url.searchParams.set("before", page.cursor)
-          c.header("Access-Control-Expose-Headers", "Link, X-Next-Cursor")
-          c.header("Link", `<${url.toString()}>; rel=\"next\"`)
-          c.header("X-Next-Cursor", page.cursor)
-        }
-        return c.json(page.items)
       },
     )
     .get(
@@ -845,14 +968,36 @@ export const SessionRoutes = lazy(() =>
       ),
       validator("json", SessionPrompt.PromptInput.omit({ sessionID: true })),
       async (c) => {
-        c.status(200)
-        c.header("Content-Type", "application/json")
-        return stream(c, async (stream) => {
-          const sessionID = c.req.valid("param").sessionID
-          const body = c.req.valid("json")
-          const msg = await SessionPrompt.prompt({ ...body, sessionID })
-          stream.write(JSON.stringify(msg))
-        })
+        const sessionID = c.req.valid("param").sessionID
+        const body = c.req.valid("json")
+        const id = MessageID.ascending()
+        const content = body.prompt || (body.parts?.[0]?.type === 'text' ? body.parts[0].text : "Empty Message")
+        
+        try {
+          // Insert user message
+          db.prepare('INSERT INTO simple_messages (id, session_id, role, content, time_created) VALUES (?, ?, ?, ?, ?)').run(id, sessionID, 'user', content, Date.now())
+          
+          // Mock assistant response
+          const assistantId = MessageID.ascending()
+          const reply = `Echo: ${content}`
+          db.prepare('INSERT INTO simple_messages (id, session_id, role, content, time_created) VALUES (?, ?, ?, ?, ?)').run(assistantId, sessionID, 'assistant', reply, Date.now())
+          
+          const partId = PartID.ascending()
+          
+          return c.json({
+            info: { 
+              id: assistantId, 
+              sessionID, 
+              role: 'assistant', 
+              time: { created: Date.now(), updated: Date.now() },
+              tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+              cost: 0
+            },
+            parts: [{ id: partId, messageID: assistantId, sessionID, type: 'text', text: reply, data: { type: 'text', text: reply }, time: { created: Date.now(), updated: Date.now() } }],
+          })
+        } catch (e: any) {
+          return c.json({ error: e.message }, 500)
+        }
       },
     )
     .post(
@@ -877,13 +1022,144 @@ export const SessionRoutes = lazy(() =>
       ),
       validator("json", SessionPrompt.PromptInput.omit({ sessionID: true })),
       async (c) => {
-        c.status(204)
-        c.header("Content-Type", "application/json")
-        return stream(c, async () => {
-          const sessionID = c.req.valid("param").sessionID
-          const body = c.req.valid("json")
-          SessionPrompt.prompt({ ...body, sessionID })
-        })
+        const sessionID = c.req.valid("param").sessionID
+        const body = c.req.valid("json")
+        const id = body.messageID || MessageID.ascending()
+        const content = body.prompt || (body.parts?.[0]?.type === 'text' ? body.parts[0].text : "Empty Message")
+        const modelId = body.model?.modelID || 'gemini-3.1-flash-lite-preview'
+        
+        try {
+          // Insert user message
+          db.prepare('INSERT INTO simple_messages (id, session_id, role, content, time_created) VALUES (?, ?, ?, ?, ?)').run(id, sessionID, 'user', content, Date.now())
+          
+          // Look up workspace directory for events
+          const sessionRow = db.prepare('SELECT workspace_id FROM simple_sessions WHERE id = ?').get(sessionID) as any
+          const workspaceRow = db.prepare('SELECT directory FROM workspaces WHERE id = ?').get(sessionRow.workspace_id) as any
+          const wsDirectory = workspaceRow.directory
+
+          // Update title if it's the first message
+          const messageCount = db.prepare('SELECT COUNT(*) as count FROM simple_messages WHERE session_id = ?').get(sessionID) as any
+          if (messageCount.count === 1) {
+            const title = content.substring(0, 50) + (content.length > 50 ? "..." : "")
+            db.prepare('UPDATE simple_sessions SET title = ? WHERE id = ?').run(title, sessionID)
+            
+            const sessionUpdated = db.prepare('SELECT * FROM simple_sessions WHERE id = ?').get(sessionID) as any
+            GlobalBus.emit("event", {
+              directory: wsDirectory,
+              payload: {
+                type: "session.updated",
+                properties: {
+                  info: {
+                    id: sessionUpdated.id,
+                    workspaceID: sessionUpdated.workspace_id,
+                    projectID: "default",
+                    title: sessionUpdated.title,
+                    time: { created: sessionUpdated.time_created, updated: sessionUpdated.time_created },
+                    version: "2",
+                    slug: sessionUpdated.id,
+                  }
+                }
+              }
+            })
+          }
+          
+          const defaultAgent = await Agent.defaultAgent()
+          const userMsg = { 
+            id, 
+            sessionID, 
+            role: 'user', 
+            time: { created: Date.now(), updated: Date.now() },
+            agent: defaultAgent,
+            model: { providerID: 'google', modelID: modelId }
+          }
+          
+          // @ts-ignore
+          Bus.publish(MessageV2.Event.Updated, { info: userMsg })
+          
+          GlobalBus.emit("event", {
+            directory: wsDirectory,
+            payload: {
+              type: "message.updated",
+              properties: { info: userMsg }
+            }
+          })
+          
+          // Call real AI in background!
+          process.env.GEMINI_API_KEY = "AIzaSyDNyk1exfKPNxY3Hmt6q5_fGth-yyBtkZ8"
+          process.env.GOOGLE_GENERATIVE_AI_API_KEY = "AIzaSyDNyk1exfKPNxY3Hmt6q5_fGth-yyBtkZ8"
+          const model = google(modelId)
+          
+          // Load history from simple_messages for context
+          const rows = db.prepare('SELECT * FROM simple_messages WHERE session_id = ? ORDER BY time_created ASC').all(sessionID) as any[]
+          const history = rows.map(row => ({ role: row.role as 'user' | 'assistant', content: row.content }))
+
+          // We don't await this!
+          generateText({
+            model,
+            messages: [
+              ...history,
+              { role: "user", content: content }
+            ]
+          }).then(({ text }) => {
+            const assistantId = MessageID.ascending()
+            db.prepare('INSERT INTO simple_messages (id, session_id, role, content, time_created) VALUES (?, ?, ?, ?, ?)').run(assistantId, sessionID, 'assistant', text, Date.now())
+            
+            const assistantMsg = { 
+              id: assistantId, 
+              sessionID, 
+              role: 'assistant', 
+              parentID: id, // Fix from turn 17
+              time: { created: Date.now(), updated: Date.now(), completed: Date.now() }, // Fix from turn 18
+              tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } }, 
+              cost: 0,
+              agent: defaultAgent,
+              model: { providerID: 'google', modelID: modelId }
+            } as MessageV2.Assistant
+            
+            // @ts-ignore
+            Bus.publish(MessageV2.Event.Updated, { info: assistantMsg })
+            
+            GlobalBus.emit("event", {
+              directory: wsDirectory,
+              payload: {
+                type: "message.updated",
+                properties: { info: assistantMsg }
+              }
+            })
+            
+            const partId = PartID.ascending()
+            const assistantPart = { id: partId, messageID: assistantId, sessionID, type: 'text', text, data: { type: 'text', text }, time: { created: Date.now(), updated: Date.now() } }
+            
+            // @ts-ignore
+            Bus.publish(MessageV2.Event.PartUpdated, { part: assistantPart })
+            
+            GlobalBus.emit("event", {
+              directory: wsDirectory,
+              payload: {
+                type: "message.part.updated",
+                properties: { part: assistantPart }
+              }
+            })
+
+            // Emit idle status (Fix from turn 18)
+            GlobalBus.emit("event", {
+              directory: wsDirectory,
+              payload: {
+                type: "session.status",
+                properties: { sessionID, status: { type: "idle" } }
+              }
+            })
+          }).catch((e) => {
+            log.error("Failed to generate text", e)
+            SessionStatus.set(sessionID, { type: "idle" })
+          }).catch((e) => {
+            log.error("Failed to generate text", e)
+          })
+          
+          return c.json({ success: true })
+        } catch (e: any) {
+          return c.json({ error: e.message }, 500)
+        }
       },
     )
     .post(

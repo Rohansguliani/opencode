@@ -1,8 +1,9 @@
+import { readFileSync } from "fs"
 import z from "zod"
 import { spawn } from "child_process"
 import { Tool } from "./tool"
 import path from "path"
-import DESCRIPTION from "./bash.txt"
+const DESCRIPTION = readFileSync(new URL("./bash.txt", import.meta.url), "utf-8")
 import { Log } from "../util/log"
 import { Instance } from "../project/instance"
 import { lazy } from "@/util/lazy"

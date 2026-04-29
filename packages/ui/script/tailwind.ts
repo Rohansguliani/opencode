@@ -1,6 +1,8 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 
-const colors = await Bun.file(import.meta.dir + "/colors.txt").text()
+import { readFileSync, writeFileSync } from 'fs'
+
+const colors = readFileSync(new URL('./colors.txt', import.meta.url), 'utf-8')
 
 const variables = []
 for (const line of colors.split("\n")) {
@@ -20,4 +22,4 @@ const output = `
 }
 `
 
-await Bun.file(import.meta.dir + "/../src/styles/tailwind/colors.css").write(output.trim())
+writeFileSync(new URL('../src/styles/tailwind/colors.css', import.meta.url), output.trim())

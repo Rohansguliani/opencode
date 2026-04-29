@@ -39,7 +39,7 @@ export namespace BunProc {
   }
 
   export function which() {
-    return process.execPath
+    return "npm"
   }
 
   export const InstallFailedError = NamedError.create(
@@ -78,12 +78,10 @@ export namespace BunProc {
 
     // Build command arguments
     const args = [
-      "add",
+      "install",
       "--force",
-      "--exact",
-      // TODO: get rid of this case (see: https://github.com/oven-sh/bun/issues/19936)
-      ...(proxied() || process.env.CI ? ["--no-cache"] : []),
-      "--cwd",
+      "--save-exact",
+      "--prefix",
       Global.Path.cache,
       pkg + "@" + version,
     ]
@@ -92,7 +90,7 @@ export namespace BunProc {
     // - If .npmrc files exist, Bun will use them automatically
     // - If no .npmrc files exist, Bun will default to https://registry.npmjs.org
     // - No need to pass --registry flag
-    log.info("installing package using Bun's default registry resolution", {
+    log.info("installing package using npm", {
       pkg,
       version,
     })

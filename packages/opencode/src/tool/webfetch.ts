@@ -1,7 +1,8 @@
+import { readFileSync } from "fs"
 import z from "zod"
 import { Tool } from "./tool"
 import TurndownService from "turndown"
-import DESCRIPTION from "./webfetch.txt"
+const DESCRIPTION = readFileSync(new URL("./webfetch.txt", import.meta.url), "utf-8")
 import { abortAfterAny } from "../util/abort"
 
 const MAX_RESPONSE_SIZE = 5 * 1024 * 1024 // 5MB

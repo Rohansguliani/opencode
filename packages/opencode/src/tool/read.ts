@@ -1,3 +1,4 @@
+import { readFileSync } from "fs"
 import z from "zod"
 import { createReadStream } from "fs"
 import * as fs from "fs/promises"
@@ -6,7 +7,7 @@ import { createInterface } from "readline"
 import { Tool } from "./tool"
 import { LSP } from "../lsp"
 import { FileTime } from "../file/time"
-import DESCRIPTION from "./read.txt"
+const DESCRIPTION = readFileSync(new URL("./read.txt", import.meta.url), "utf-8")
 import { Instance } from "../project/instance"
 import { assertExternalDirectory } from "./external-directory"
 import { InstructionPrompt } from "../session/instruction"

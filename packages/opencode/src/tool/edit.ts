@@ -1,3 +1,4 @@
+import { readFileSync } from "fs"
 // the approaches in this edit tool are sourced from
 // https://github.com/cline/cline/blob/main/evals/diff-edits/diff-apply/diff-06-23-25.ts
 // https://github.com/google-gemini/gemini-cli/blob/main/packages/core/src/utils/editCorrector.ts
@@ -8,7 +9,7 @@ import * as path from "path"
 import { Tool } from "./tool"
 import { LSP } from "../lsp"
 import { createTwoFilesPatch, diffLines } from "diff"
-import DESCRIPTION from "./edit.txt"
+const DESCRIPTION = readFileSync(new URL("./edit.txt", import.meta.url), "utf-8")
 import { File } from "../file"
 import { FileWatcher } from "../file/watcher"
 import { Bus } from "../bus"

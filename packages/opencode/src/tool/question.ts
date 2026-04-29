@@ -1,7 +1,8 @@
+import { readFileSync } from "fs"
 import z from "zod"
 import { Tool } from "./tool"
 import { Question } from "../question"
-import DESCRIPTION from "./question.txt"
+const DESCRIPTION = readFileSync(new URL("./question.txt", import.meta.url), "utf-8")
 
 export const QuestionTool = Tool.define("question", {
   description: DESCRIPTION,

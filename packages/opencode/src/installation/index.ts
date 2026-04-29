@@ -232,7 +232,7 @@ export namespace Installation {
   }
 
   export const VERSION = typeof OPENCODE_VERSION === "string" ? OPENCODE_VERSION : "local"
-  export const CHANNEL = typeof OPENCODE_CHANNEL === "string" ? OPENCODE_CHANNEL : "local"
+  export declare const CHANNEL: string
   export const USER_AGENT = `opencode/${CHANNEL}/${VERSION}/${Flag.OPENCODE_CLIENT}`
 
   export async function latest(installMethod?: Method) {
@@ -301,3 +301,11 @@ export namespace Installation {
       .then((data: any) => data.tag_name.replace(/^v/, ""))
   }
 }
+
+Object.defineProperty(Installation, "CHANNEL", {
+  get() {
+    return process.env.OPENCODE_CHANNEL || (typeof OPENCODE_CHANNEL === "string" ? OPENCODE_CHANNEL : "local")
+  },
+  enumerable: true,
+  configurable: false,
+})

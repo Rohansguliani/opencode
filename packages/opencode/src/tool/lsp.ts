@@ -1,8 +1,9 @@
+import { readFileSync } from "fs"
 import z from "zod"
 import { Tool } from "./tool"
 import path from "path"
 import { LSP } from "../lsp"
-import DESCRIPTION from "./lsp.txt"
+const DESCRIPTION = readFileSync(new URL("./lsp.txt", import.meta.url), "utf-8")
 import { Instance } from "../project/instance"
 import { pathToFileURL } from "url"
 import { assertExternalDirectory } from "./external-directory"
